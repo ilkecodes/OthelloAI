@@ -1,0 +1,33 @@
+# FastAPI & Server
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+
+# Database - psycopg3 (Mac friendly)
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+
+# Environment & Config
+python-dotenv==1.0.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Celery & Redis
+celery==5.4.0
+redis==5.2.0
+
+# AI Services
+openai==1.55.3
+apify-client==2.1.0
+
+# Utilities
+requests==2.32.3
+python-dateutil==2.9.0
+pytz==2024.2
+
+# Image Processing
+Pillow==11.0.0
