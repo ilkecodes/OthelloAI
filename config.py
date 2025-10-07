@@ -4,11 +4,14 @@ import os
 load_dotenv()
 
 class Settings:
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://marketing_user:marketing_password_2024@localhost:5432/marketing_db")
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL", 
+        "sqlite:///./marketing.db"  # Default SQLite
+    )
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")
-    ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-    DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+    ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 settings = Settings()
 
