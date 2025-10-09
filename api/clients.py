@@ -62,3 +62,15 @@ def get_client(client_id: str, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     return client
+
+@router.delete("/{client_id}")
+def delete_client(client_id: str, db: Session = Depends(get_db)):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    # Soft delete
+    client.active = False
+    db.commit()
+    
+    return {"message": "Client deleted successfully", "id": client_id}
