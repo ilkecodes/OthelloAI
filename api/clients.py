@@ -1,36 +1,34 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
 from datetime import datetime
 from database import get_db, Client
 
 router = APIRouter()
 
-# Schemas
 class ClientCreate(BaseModel):
     name: str
     industry: Optional[str] = None
     description: Optional[str] = None
     target_audience: Optional[str] = None
     brand_voice: Optional[str] = None
-    keywords: List[str] = []
-    social_platforms: List[str] = []
+    keywords: List[str] = Field(default_factory=list)
+    social_platforms: List[str] = Field(default_factory=list)
 
 class ClientResponse(BaseModel):
     id: str
     name: str
     slug: str
     active: bool
-    keywords: dict = None
-    platforms: dict = None
-    brand_guidelines: dict = None
+    keywords: Optional[Dict[str, Any]] = None
+    platforms: Optional[Dict[str, Any]] = None
+    brand_guidelines: Optional[Dict[str, Any]] = None
     created_at: datetime
     
     class Config:
         from_attributes = True
 
-# Endpoints
 @router.get("/", response_model=List[ClientResponse])
 def get_clients(db: Session = Depends(get_db)):
     clients = db.query(Client).filter(Client.active == True).all()
@@ -38,7 +36,6 @@ def get_clients(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=ClientResponse)
 def create_client(client: ClientCreate, db: Session = Depends(get_db)):
-    # Slug oluştur
     slug = client.name.lower().replace(" ", "-").replace(".", "")
     
     db_client = Client(
