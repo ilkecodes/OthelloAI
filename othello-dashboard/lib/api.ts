@@ -1,17 +1,35 @@
 import axios from 'axios';
 
-// PRODUCTION URL - hardcoded
-const API_URL = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
-  ? 'https://othello-backend-production-2ff4.up.railway.app'
-  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
-
-console.log('🔍 API_URL:', API_URL);
+// Client-side'da çalışacak
+const getApiUrl = () => {
+  // Production Vercel
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return 'https://othello-backend-production-2ff4.up.railway.app';
+  }
+  
+  // Environment variable
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // Local fallback
+  return 'http://localhost:8000';
+};
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: getApiUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Her request'te baseURL'i güncelle (client-side için)
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    config.baseURL = 'https://othello-backend-production-2ff4.up.railway.app';
+  }
+  console.log('🚀 Request to:', config.baseURL + config.url);
+  return config;
 });
 
 export const getClients = () => api.get('/api/clients');
