@@ -9,7 +9,7 @@ class Settings:
         "sqlite:///./marketing.db"  # Default SQLite
     )
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")
+    _API_TOKEN = os.getenv("APIFY_API_TOKEN", "")
     ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 

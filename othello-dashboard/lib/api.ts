@@ -21,3 +21,4 @@ export const getCampaigns = () => axios.get(`${BACKEND_URL}/api/campaigns`);
 export const createCampaign = (data: any) => axios.post(`${BACKEND_URL}/api/campaigns`, data);
 
 export default api;
+// force rebuild Wed Oct 15 13:11:54 +03 2025
