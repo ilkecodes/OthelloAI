@@ -6,7 +6,7 @@ from config import settings
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="OthelloAI Marketing Platform")
+app = FastAPI(title="OthelloAI Marketing Platform", redirect_slashes=False)
 
 # CORS
 app.add_middleware(
