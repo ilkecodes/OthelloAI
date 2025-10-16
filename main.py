@@ -59,3 +59,16 @@ def drop_trends_table():
         return {"message": "Trends table recreated successfully"}
     except Exception as e:
         return {"error": str(e)}
+
+@app.post("/admin/drop-campaigns-table")
+def drop_campaigns_table():
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS campaign_influencers CASCADE;"))
+            conn.execute(text("DROP TABLE IF EXISTS campaigns CASCADE;"))
+            conn.commit()
+        Base.metadata.create_all(bind=engine)
+        return {"message": "✅ Campaigns tables recreated"}
+    except Exception as e:
+        return {"error": str(e)}
