@@ -50,6 +50,17 @@ class Influencer(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(String, unique=True)
     platform = Column(String)
+    followers = Column(Integer, default=0)
+    engagement_rate = Column(Float, default=0.0)
+    bio = Column(Text, nullable=True)
+    profile_pic = Column(String, nullable=True)
+    profile_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+class Influencer(Base):
+    __tablename__ = "influencers"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String, unique=True)
+    platform = Column(String)
     followers = Column(String)
     engagement_rate = Column(String)
     bio = Column(Text)
