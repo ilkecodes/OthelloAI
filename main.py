@@ -47,5 +47,15 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
+
 @app.post("/admin/drop-trends-table")
 def drop_trends_table():
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS trends CASCADE;"))
+            conn.commit()
+        Base.metadata.create_all(bind=engine)
+        return {"message": "Trends table recreated successfully"}
+    except Exception as e:
+        return {"error": str(e)}
