@@ -33,11 +33,11 @@ if 'api.campaigns' in sys.modules:
 
 from api import clients, content, trends, influencers, campaigns
 
-app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
-app.include_router(content.router, prefix="/api/content", tags=["content"])
-app.include_router(trends.router, prefix="/api/trends", tags=["trends"])
-app.include_router(influencers.router, prefix="/api/influencers", tags=["influencers"])
-app.include_router(campaigns.router, prefix="/api/campaigns", tags=["campaigns"])
+app.include_router(clients.router, prefix="/api/clients/", tags=["clients"])
+app.include_router(content.router, prefix="/api/content/", tags=["content"])
+app.include_router(trends.router, prefix="/api/trends/", tags=["trends"])
+app.include_router(influencers.router, prefix="/api/influencers/", tags=["influencers"])
+app.include_router(campaigns.router, prefix="/api/campaigns/", tags=["campaigns"])
 
 @app.get("/")
 def root():
