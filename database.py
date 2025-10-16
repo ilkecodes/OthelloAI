@@ -55,7 +55,7 @@ class Influencer(Base):
     engagement_rate = Column(String)
     bio = Column(Text)
     profile_pic = Column(String)
-    metadata = Column(JSON)
+    profile_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Campaign(Base):
@@ -84,5 +84,5 @@ class Trend(Base):
     keyword = Column(String)
     category = Column(String)
     score = Column(String)
-    metadata = Column(JSON)
+    profile_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
