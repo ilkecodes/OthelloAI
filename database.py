@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Boolean, JSON, Text
+from sqlalchemy import create_engine, Column, String, DateTime, Boolean, JSON, Text, Integer, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import uuid
@@ -6,7 +6,6 @@ from datetime import datetime
 import os
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is not set!")
 
@@ -82,7 +81,10 @@ class Trend(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     client_id = Column(String)
     keyword = Column(String)
-    category = Column(String)
-    score = Column(String)
-    profile_metadata = Column(JSON)
+    platform = Column(String)
+    post_count = Column(Integer, default=0)
+    avg_engagement = Column(Float, default=0.0)
+    trending_score = Column(Float, default=0.0)
+    extra_data = Column(JSON)
+    scanned_at = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
