@@ -24,6 +24,11 @@ def health():
 from database import Base, engine
 Base.metadata.create_all(bind=engine)
 
-# SADECE Clients API
+# API Routes
 from api.clients import router as clients_router
+from api.trends import router as trends_router
+
 app.include_router(clients_router, prefix="/api/clients")
+app.include_router(trends_router, prefix="/api/trends")  # ✅ Eklendi
+
+print("✅ API routes loaded: clients, trends")
