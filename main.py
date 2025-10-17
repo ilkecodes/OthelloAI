@@ -1,54 +1,45 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base
-from config import settings
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+app = FastAPI(title="OthelloAI Marketing Platform")
 
-app = FastAPI(title="OthelloAI Marketing Platform", redirect_slashes=False)
-
-# ========== CORS MIDDLEWARE (ÖNEMLİ!) ==========
+# ========== CORS - EN BAŞTA ==========
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://othello-dashboard-frontend.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "*"  # Geliştirme için tüm originlere izin
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],  # HEAD eklendi
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
-# Import routers
-from api import clients, content, trends, campaigns, influencers
-
-# Register routers
-app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
-app.include_router(content.router, prefix="/api/content", tags=["content"])
-app.include_router(trends.router, prefix="/api/trends", tags=["trends"])
-app.include_router(campaigns.router, prefix="/api/campaigns", tags=["campaigns"])
-app.include_router(influencers.router, prefix="/api/influencers", tags=["influencers"])
-
 @app.get("/")
+@app.head("/")  # HEAD method eklendi
 def root():
-    return {
-        "message": "OthelloAI Marketing Platform API", 
-        "version": "2.0",
-        "status": "healthy"
-    }
+    return {"message": "OthelloAI API", "version": "2.0", "status": "healthy"}
 
 @app.get("/health")
+@app.head("/health")  # HEAD method eklendi
 def health():
     return {"status": "ok"}
 
-# OPTIONS endpoint for CORS preflight
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(rest_of_path: str):
-    return {"message": "OK"}
+# ========== DATABASE ==========
+try:
+    from database import engine, Base
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"⚠️ Database error: {e}")
+
+# ========== API ROUTES ==========
+try:
+    from api import clients, content, trends, campaigns, influencers
+    
+    app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
+    app.include_router(content.router, prefix="/api/content", tags=["content"])
+    app.include_router(trends.router, prefix="/api/trends", tags=["trends"])
+    app.include_router(campaigns.router, prefix="/api/campaigns", tags=["campaigns"])
+    app.include_router(influencers.router, prefix="/api/influencers", tags=["influencers"])
+except Exception as e:
+    print(f"⚠️ API error: {e}")
 
 if __name__ == "__main__":
     import uvicorn
