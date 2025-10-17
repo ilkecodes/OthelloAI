@@ -1,14 +1,16 @@
-"""Temporary in-memory campaigns API for the dashboard."""
+"""Campaign management endpoints backed by the relational database."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from threading import Lock
 from typing import List, Optional
-from uuid import uuid4
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..models.campaign import Campaign
 
 
 class CampaignBase(BaseModel):
@@ -25,76 +27,62 @@ class CampaignBase(BaseModel):
     awareness_goal: Optional[str] = None
 
 
-class Campaign(CampaignBase):
-    id: str
-    created_at: datetime
-
-
 class CampaignCreate(CampaignBase):
     """Payload accepted when creating a campaign."""
 
 
+class CampaignResponse(CampaignBase):
+    id: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 router = APIRouter()
 
-_campaigns_lock = Lock()
-_campaigns: List[Campaign] = [
-    Campaign(
-        id=str(uuid4()),
-        name="Lansman Kampanyası",
-        client_id="demo-client",
-        campaign_type="awareness",
-        sector="Teknoloji",
-        status="active",
-        goals=["Erişim Sayısı", "Etkileşim Sayısı"],
-        budget=12500.0,
-        start_date=datetime(2024, 1, 15),
-        end_date=datetime(2024, 2, 15),
-        sales_goal=None,
-        awareness_goal="Marka bilinirliğini %20 artır",
-        created_at=datetime(2024, 1, 10, 8, 30),
-    ),
-    Campaign(
-        id=str(uuid4()),
-        name="Bahar İndirimi",
-        client_id="demo-client",
-        campaign_type="sales",
-        sector="Giyim",
-        status="planning",
-        goals=["Online Satış"],
-        budget=9800.0,
-        start_date=datetime(2024, 3, 1),
-        end_date=datetime(2024, 3, 31),
-        sales_goal="Online Satış",
-        awareness_goal=None,
-        created_at=datetime(2024, 2, 20, 9, 15),
-    ),
-]
 
+@router.get("/", response_model=List[CampaignResponse])
+def list_campaigns(
+    client_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> List[Campaign]:
+    """Return campaigns stored in the relational database."""
 
-@router.get("/", response_model=List[Campaign])
-async def list_campaigns(client_id: Optional[str] = None) -> List[Campaign]:
-    """Return the in-memory campaigns list, optionally filtered by client."""
-
-    with _campaigns_lock:
-        campaigns = list(_campaigns)
-
+    query = db.query(Campaign)
     if client_id:
-        campaigns = [campaign for campaign in campaigns if campaign.client_id == client_id]
+        query = query.filter(Campaign.client_id == client_id)
 
-    return campaigns
+    return query.order_by(Campaign.created_at.desc()).all()
 
 
-@router.post("/", response_model=Campaign, status_code=201)
-async def create_campaign(payload: CampaignCreate) -> Campaign:
-    """Create a campaign in the in-memory store."""
+@router.post("/", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
+def create_campaign(payload: CampaignCreate, db: Session = Depends(get_db)) -> Campaign:
+    """Create a campaign persisted in the database."""
 
-    new_campaign = Campaign(
-        id=str(uuid4()),
-        created_at=datetime.utcnow(),
-        **payload.model_dump(),
+    campaign = Campaign(
+        name=payload.name,
+        client_id=payload.client_id,
+        campaign_type=payload.campaign_type,
+        sector=payload.sector,
+        status=payload.status,
+        goals=payload.goals,
+        budget=payload.budget,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        sales_goal=payload.sales_goal,
+        awareness_goal=payload.awareness_goal,
     )
 
-    with _campaigns_lock:
-        _campaigns.append(new_campaign)
+    db.add(campaign)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Kampanya veritabanına kaydedilemedi.",
+        )
 
-    return new_campaign
+    db.refresh(campaign)
+    return campaign
