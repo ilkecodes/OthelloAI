@@ -14,23 +14,16 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"status": "ok", "cors": "enabled"}
+    return {"status": "ok"}
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# Sonra database ve API'ler yüklenecek
-try:
-    from database import Base, engine
-    Base.metadata.create_all(bind=engine)
-    
-    from api import clients, content, trends, campaigns, influencers
-    app.include_router(clients.router, prefix="/api/clients")
-    app.include_router(content.router, prefix="/api/content")
-    app.include_router(trends.router, prefix="/api/trends")
-    app.include_router(campaigns.router, prefix="/api/campaigns")
-    app.include_router(influencers.router, prefix="/api/influencers")
-    print("✅ All loaded")
-except Exception as e:
-    print(f"⚠️ Error: {e}")
+# Database
+from database import Base, engine
+Base.metadata.create_all(bind=engine)
+
+# SADECE Clients API
+from api.clients import router as clients_router
+app.include_router(clients_router, prefix="/api/clients")
