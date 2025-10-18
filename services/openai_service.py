@@ -1,82 +1,85 @@
+"""OpenAI Service - İçerik Üretimi"""
+import os
+from typing import Dict, Optional
 from openai import OpenAI
-from config import settings
-from typing import List, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
 class OpenAIService:
     def __init__(self):
-        if not settings.OPENAI_API_KEY:
-            logger.warning("OpenAI API key not configured")
-            self.client = None
-        else:
-            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
-    def generate_content(
-        self,
-        prompt: str,
-        platform: str = "instagram",
-        tone: str = "professional",
-        max_tokens: int = 500
-    ) -> Optional[str]:
-        """Generate social media content using GPT-4"""
+    async def generate_content(
+        self, client_name: str, brand_voice: Dict, platform: str,
+        topic: str, tone: Optional[str] = None, goal: Optional[str] = "engagement",
+        trend_context: Optional[str] = None
+    ) -> Dict:
+        brand_voice_str = f"""MARKA SESİ:
+- Ton: {brand_voice.get('tone', 'professional')}
+- Dil: {brand_voice.get('language_style', 'formal')}
+- Emoji: {brand_voice.get('emoji_usage', 'medium')}"""
         
-        if not self.client:
-            return "OpenAI not configured. Please add OPENAI_API_KEY to .env"
+        platform_specs = {
+            "instagram": "Max 2200 karakter. İlk 125 karakter kritik.",
+            "linkedin": "Max 3000 karakter. Profesyonel ton.",
+            "tiktok": "Kısa ve çarpıcı. Max 150 karakter.",
+        }.get(platform, "Genel sosyal medya.")
         
-        system_prompt = f"""You are a professional social media content creator.
-Platform: {platform}
-Tone: {tone}
-Create engaging, authentic content that resonates with the audience.
-Include relevant hashtags at the end."""
+        trend_section = f"\nTREND: {trend_context}\n" if trend_context else ""
         
+        goal_strategy = {
+            "awareness": "Bilinirlik artır. Reach odaklı.",
+            "engagement": "Etkileşim iste. Soru sor.",
+            "sales": "Satış odaklı. Net CTA ver.",
+        }.get(goal, "Engagement odaklı.")
+        
+        prompt = f"""Sen {client_name} markasının content writer'ısın.
+
+{brand_voice_str}
+
+PLATFORM: {platform}
+{platform_specs}
+
+KONU: {topic}
+HEDEF: {goal_strategy}
+{trend_section}
+
+ÇIKTI FORMATI:
+Caption: [metin]
+Hashtags: [hashtags]
+CTA: [call to action]"""
+
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": f"Sen {client_name} markasının content creator'ısın."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=max_tokens,
-                temperature=0.7
+                temperature=0.8,
+                max_tokens=800
             )
             
-            content = response.choices[0].message.content
-            logger.info(f"Generated content for {platform}")
-            return content
-            
+            content = response.choices[0].message.content.strip()
+            return self._parse_content(content)
         except Exception as e:
-            logger.error(f"OpenAI API error: {e}")
-            return f"Error generating content: {str(e)}"
+            logger.error(f"Error: {e}")
+            return {"caption": f"Hata: {str(e)}", "hashtags": "", "cta": ""}
     
-    def generate_hashtags(
-        self,
-        topic: str,
-        count: int = 10
-    ) -> List[str]:
-        """Generate relevant hashtags for a topic"""
-        
-        if not self.client:
-            return ["#AI", "#Marketing"]
-        
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "Generate relevant hashtags without the # symbol."},
-                    {"role": "user", "content": f"Generate {count} hashtags for: {topic}"}
-                ],
-                max_tokens=100,
-                temperature=0.5
-            )
-            
-            hashtags_text = response.choices[0].message.content
-            hashtags = [f"#{tag.strip()}" for tag in hashtags_text.split() if tag.strip()]
-            return hashtags[:count]
-            
-        except Exception as e:
-            logger.error(f"Error generating hashtags: {e}")
-            return []
+    def _parse_content(self, raw: str) -> Dict:
+        lines = raw.split('\n')
+        caption = hashtags = cta = ""
+        for line in lines:
+            line = line.strip()
+            if line.startswith("Caption:"):
+                caption = line.replace("Caption:", "").strip()
+            elif line.startswith("Hashtags:"):
+                hashtags = line.replace("Hashtags:", "").strip()
+            elif line.startswith("CTA:"):
+                cta = line.replace("CTA:", "").strip()
+            elif caption and not line.startswith(("Hashtags:", "CTA:")):
+                caption += " " + line
+        return {"caption": caption or raw, "hashtags": hashtags, "cta": cta}
 
 openai_service = OpenAIService()

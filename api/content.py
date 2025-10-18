@@ -1,103 +1,99 @@
+"""Content API - İçerik Üretimi"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel
-from datetime import datetime
-
-from database import get_db, Content
-from services.openai_service import openai_service
+from database import get_db, Content, Client, Trend
+from services import openai_service
 
 router = APIRouter()
 
-class ContentCreate(BaseModel):
+class ContentGenerateRequest(BaseModel):
     client_id: str
     platform: str
-    text: str
-    scheduled_time: Optional[datetime] = None
+    topic: str
+    tone: Optional[str] = None
+    goal: Optional[str] = "engagement"
+    trend_id: Optional[int] = None
 
-class ContentGenerate(BaseModel):
-    client_id: str
-    platform: str
-    prompt: str
-    tone: str = "professional"
+@router.post("/generate")
+async def generate_content(request: ContentGenerateRequest, db: Session = Depends(get_db)):
+    client = db.query(Client).filter(Client.id == request.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    brand_voice = {}
+    if client.brand_guidelines and client.brand_guidelines.get("brand_voice"):
+        brand_voice = client.brand_guidelines["brand_voice"]
+    else:
+        brand_voice = {
+            "tone": "professional",
+            "emoji_usage": "medium",
+            "language_style": "formal",
+            "content_themes": ["general"],
+            "hashtag_strategy": "3-5 hashtags",
+            "brand_personality": ["authentic"]
+        }
+    
+    trend_context = None
+    if request.trend_id:
+        trend = db.query(Trend).filter(Trend.id == request.trend_id).first()
+        if trend:
+            trend_context = f"Trend: #{trend.keyword} (Score: {trend.trending_score:.2f})"
+    
+    print(f"🎨 Generating content for {client.name}")
+    
+    try:
+        result = await openai_service.generate_content(
+            client_name=client.name,
+            brand_voice=brand_voice,
+            platform=request.platform,
+            topic=request.topic,
+            tone=request.tone,
+            goal=request.goal,
+            trend_context=trend_context
+        )
+        
+        db_content = Content(
+            client_id=request.client_id,
+            platform=request.platform,
+            text=f"{result['caption']}\n\n{result['hashtags']}\n\n{result['cta']}",
+            status="generated"
+        )
+        db.add(db_content)
+        db.commit()
+        db.refresh(db_content)
+        
+        return {
+            "success": True,
+            "content_id": db_content.id,
+            "caption": result["caption"],
+            "hashtags": result["hashtags"],
+            "cta": result["cta"],
+            "platform": request.platform,
+            "brand_voice_used": bool(client.brand_guidelines and client.brand_guidelines.get("brand_voice"))
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
-class ContentResponse(BaseModel):
-    id: str
-    client_id: str
-    platform: str
-    text: str
-    status: str
-    scheduled_time: Optional[datetime]
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-@router.get("/", response_model=List[ContentResponse])
-def get_content(client_id: Optional[str] = None, db: Session = Depends(get_db)):
-    if not db:
-        return []
+@router.get("/")
+async def get_content(client_id: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(Content)
     if client_id:
         query = query.filter(Content.client_id == client_id)
-    return query.all()
-
-@router.post("/", response_model=ContentResponse)
-def create_content(content: ContentCreate, db: Session = Depends(get_db)):
-    if not db:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    db_content = Content(
-        client_id=content.client_id,
-        platform=content.platform,
-        text=content.text,
-        scheduled_time=content.scheduled_time,
-        status="draft"
-    )
-    db.add(db_content)
-    db.commit()
-    db.refresh(db_content)
-    return db_content
-
-@router.post("/generate")
-def generate_content(request: ContentGenerate, db: Session = Depends(get_db)):
-    """Generate content using OpenAI"""
-    
-    generated_text = openai_service.generate_content(
-        prompt=request.prompt,
-        platform=request.platform,
-        tone=request.tone
-    )
-    
-    if not db:
-        return {
-            "text": generated_text,
-            "message": "Content generated but not saved (database unavailable)"
-        }
-    
-    # Save to database
-    db_content = Content(
-        client_id=request.client_id,
-        platform=request.platform,
-        text=generated_text,
-        status="generated"
-    )
-    db.add(db_content)
-    db.commit()
-    db.refresh(db_content)
-    
+    contents = query.order_by(Content.created_at.desc()).limit(50).all()
     return {
-        "id": db_content.id,
-        "text": generated_text,
-        "message": "Content generated and saved"
+        "count": len(contents),
+        "content": [
+            {
+                "id": c.id,
+                "client_id": c.client_id,
+                "platform": c.platform,
+                "text": c.text,
+                "status": c.status,
+                "created_at": c.created_at.isoformat() if c.created_at else None
+            }
+            for c in contents
+        ]
     }
-
-@router.get("/{content_id}", response_model=ContentResponse)
-def get_content_item(content_id: str, db: Session = Depends(get_db)):
-    if not db:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    content = db.query(Content).filter(Content.id == content_id).first()
-    if not content:
-        raise HTTPException(status_code=404, detail="Content not found")
-    return content

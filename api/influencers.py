@@ -1,153 +1,118 @@
+"""Influencers API - Influencer Keşfi"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Dict, Optional
+from typing import List, Optional
 from pydantic import BaseModel
-from database import get_db, Influencer
-from services.apify_service import apify_service
+from database import get_db, Influencer, Client
+from services import apify_service
 
 router = APIRouter()
 
-class InfluencerFilters(BaseModel):
-    # Arama yöntemi
-    search_type: str  # "hashtag", "username", "niche"
-    search_value: str
-    
-    # Filtreler
-    min_followers: Optional[int] = None
-    max_followers: Optional[int] = None
-    min_engagement: Optional[float] = None
-    location: Optional[str] = None
-    verified_only: Optional[bool] = False
-    business_only: Optional[bool] = False
-    
-    limit: int = 20
-
-class InfluencerResponse(BaseModel):
-    id: str
-    username: str
-    platform: str
-    followers: int
-    engagement_rate: float
-    bio: Optional[str] = None
-    profile_pic: Optional[str] = None
-    is_verified: Optional[bool] = False
-    is_business: Optional[bool] = False
-    posts_count: Optional[int] = 0
-    
-    class Config:
-        from_attributes = True
+class InfluencerSearchRequest(BaseModel):
+    search_type: str
+    client_id: Optional[str] = None
+    niche_keywords: List[str] = []
+    min_followers: Optional[int] = 10000
+    max_followers: Optional[int] = 500000
+    min_engagement: Optional[float] = 2.0
+    limit: Optional[int] = 20
 
 @router.post("/search")
-async def search_influencers(filters: InfluencerFilters, db: Session = Depends(get_db)):
-    """Advanced influencer search with filters"""
-    
-    # Apify'dan veri çek
-    if filters.search_type == "hashtag":
-        raw_results = await apify_service.search_by_hashtag(
-            hashtag=filters.search_value,
-            limit=filters.limit * 2  # Filtreleme için fazladan çek
-        )
-    elif filters.search_type == "username":
-        raw_results = await apify_service.search_instagram_profiles(
-            usernames=[filters.search_value],
-            limit=filters.limit
-        )
+async def search_influencers(request: InfluencerSearchRequest, db: Session = Depends(get_db)):
+    if request.search_type == "client_based":
+        if not request.client_id:
+            raise HTTPException(status_code=400, detail="client_id required")
+        
+        client = db.query(Client).filter(Client.id == request.client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        
+        print(f"🔍 Searching for: {client.name}")
+        
+        client_keywords = []
+        if client.keywords and client.keywords.get("keywords"):
+            client_keywords = client.keywords["keywords"]
+        
+        if client.brand_guidelines and client.brand_guidelines.get("industry"):
+            industry = client.brand_guidelines["industry"]
+            industry_map = {
+                "Healthcare": ["health", "wellness", "medical"],
+                "Food & Beverage": ["food", "foodie", "restaurant"],
+                "Fashion": ["fashion", "style", "ootd"],
+                "Beauty": ["beauty", "makeup", "skincare"],
+            }
+            client_keywords.extend(industry_map.get(industry, []))
+        
+        search_keywords = list(set(client_keywords + request.niche_keywords))[:5]
     else:
-        # Niche search - multiple hashtags
-        niche_hashtags = {
-            "moda": ["fashion", "style", "ootd", "moda"],
-            "guzellik": ["beauty", "makeup", "skincare", "guzellik"],
-            "yemek": ["food", "foodie", "yemek", "mutfak"],
-            "saglik": ["health", "fitness", "wellness", "saglik"],
-            "seyahat": ["travel", "wanderlust", "seyahat"]
+        if not request.niche_keywords:
+            raise HTTPException(status_code=400, detail="niche_keywords required")
+        search_keywords = request.niche_keywords
+    
+    print(f"📌 Keywords: {search_keywords}")
+    
+    influencers = await apify_service.search_influencers_by_niche(
+        niche_keywords=search_keywords,
+        min_followers=request.min_followers or 10000,
+        max_followers=request.max_followers or 500000,
+        limit=request.limit or 20
+    )
+    
+    if not influencers:
+        return {
+            "message": "No influencers found",
+            "search_type": request.search_type,
+            "keywords": search_keywords,
+            "results": []
         }
-        hashtag = niche_hashtags.get(filters.search_value.lower(), [filters.search_value])[0]
-        raw_results = await apify_service.search_by_hashtag(hashtag=hashtag, limit=filters.limit * 2)
     
-    # Filtreleme uygula
-    filtered_results = []
-    for result in raw_results:
-        if "error" in result:
-            continue
-            
-        followers = result.get("followers", 0)
-        
-        # Takipçi filtresi
-        if filters.min_followers and followers < filters.min_followers:
-            continue
-        if filters.max_followers and followers > filters.max_followers:
-            continue
-        
-        # Engagement hesapla
-        likes = result.get("likes", 0)
-        comments = result.get("comments", 0)
-        engagement_rate = ((likes + comments) / followers * 100) if followers > 0 else 0
-        
-        # Engagement filtresi
-        if filters.min_engagement and engagement_rate < filters.min_engagement:
-            continue
-        
-        # Verified filtresi
-        if filters.verified_only and not result.get("is_verified", False):
-            continue
-        
-        # Business filtresi
-        if filters.business_only and not result.get("is_business", False):
-            continue
-        
-        result["engagement_rate"] = round(engagement_rate, 2)
-        filtered_results.append(result)
+    if request.min_engagement:
+        influencers = [inf for inf in influencers if inf["engagement_rate"] >= request.min_engagement]
     
-    # Limit uygula
-    filtered_results = filtered_results[:filters.limit]
-    
-    # Database'e kaydet
-    if db and filtered_results:
-        for result in filtered_results:
-            influencer = Influencer(
-                username=result.get("username"),
-                platform="instagram",
-                followers=result.get("followers", 0),
-                engagement_rate=result.get("engagement_rate", 0),
-                bio=result.get("biography") or result.get("bio"),
-                profile_pic=result.get("profile_pic_url"),
-                profile_metadata={
-                    "is_verified": result.get("is_verified", False),
-                    "is_business": result.get("is_business", False),
-                    "posts": result.get("posts", 0),
-                    "full_name": result.get("full_name")
-                }
-            )
-            db.merge(influencer)  # merge yerine add kullanırsak duplicate olur
+    results = []
+    for inf in influencers:
+        tier = inf["tier"]
+        engagement = inf["engagement_rate"]
         
-        try:
-            db.commit()
-        except:
-            db.rollback()
+        if tier == "A-Tier":
+            rec = f"⭐ YÜKSEK KALİTE! {engagement:.1f}% engagement."
+        elif tier == "B-Tier":
+            rec = f"✅ İYİ SEÇENEK: {engagement:.1f}% engagement."
+        else:
+            rec = f"⚠️ DİKKATLİ: {engagement:.1f}% düşük."
+        
+        results.append({
+            "username": inf["username"],
+            "followers": inf["followers"],
+            "engagement_rate": inf["engagement_rate"],
+            "tier": inf["tier"],
+            "niche": inf["niche"],
+            "profile_url": inf["profile_url"],
+            "recommendation": rec
+        })
+    
+    print(f"✅ Found {len(results)} influencers")
     
     return {
-        "results": filtered_results,
-        "count": len(filtered_results),
-        "filters_applied": {
-            "min_followers": filters.min_followers,
-            "max_followers": filters.max_followers,
-            "min_engagement": filters.min_engagement
-        }
+        "message": f"Found {len(results)} influencers",
+        "search_type": request.search_type,
+        "keywords": search_keywords,
+        "results": results
     }
 
-@router.get("/", response_model=List[InfluencerResponse])
-def get_all_influencers(db: Session = Depends(get_db)):
-    """Get saved influencers from database"""
-    if not db:
-        return []
-    return db.query(Influencer).limit(50).all()
-
-@router.get("/{influencer_id}", response_model=InfluencerResponse)
-def get_influencer(influencer_id: str, db: Session = Depends(get_db)):
-    if not db:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    influencer = db.query(Influencer).filter(Influencer.id == influencer_id).first()
-    if not influencer:
-        raise HTTPException(status_code=404, detail="Influencer not found")
-    return influencer
+@router.get("/")
+async def get_saved_influencers(db: Session = Depends(get_db)):
+    influencers = db.query(Influencer).order_by(Influencer.followers.desc()).limit(50).all()
+    return {
+        "count": len(influencers),
+        "influencers": [
+            {
+                "id": inf.id,
+                "username": inf.username,
+                "followers": inf.followers,
+                "engagement_rate": inf.engagement_rate,
+                "profile_url": f"https://instagram.com/{inf.username}"
+            }
+            for inf in influencers
+        ]
+    }
