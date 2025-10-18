@@ -75,7 +75,7 @@ def delete_client(client_id: str, db: Session = Depends(get_db)):
 @router.patch("/{client_id}")
 def update_client(
     client_id: str,
-    instagram_url: str = None,
+    update_data: dict,
     db: Session = Depends(get_db)
 ):
     """Update client with Instagram URL"""
@@ -83,8 +83,8 @@ def update_client(
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    if instagram_url:
-        client.instagram_url = instagram_url
+    if "instagram_url" in update_data:
+        client.instagram_url = update_data["instagram_url"]
     
     db.commit()
     db.refresh(client)
