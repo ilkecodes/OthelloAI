@@ -27,8 +27,10 @@ Base.metadata.create_all(bind=engine)
 # API Routes
 from api.clients import router as clients_router
 from api.trends import router as trends_router
+from api.campaigns import router as campaigns_router
 
-app.include_router(clients_router, prefix="/api/clients")
-app.include_router(trends_router, prefix="/api/trends")  # ✅ Eklendi
+app.include_router(clients_router, prefix="/api/clients", tags=["clients"])
+app.include_router(trends_router, prefix="/api/trends", tags=["trends"])
+app.include_router(campaigns_router, prefix="/api/campaigns", tags=["campaigns"])
 
-print("✅ API routes loaded: clients, trends")
+print("✅ API routes loaded: clients, trends, campaigns")
