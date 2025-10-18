@@ -34,3 +34,18 @@ app.include_router(trends_router, prefix="/api/trends", tags=["trends"])
 app.include_router(campaigns_router, prefix="/api/campaigns", tags=["campaigns"])
 
 print("✅ API routes loaded: clients, trends, campaigns")
+
+@app.post("/admin/reset-trends-sequence")
+def reset_trends_sequence():
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            # Mevcut max ID'yi bul
+            result = conn.execute(text("SELECT COALESCE(MAX(id), 0) FROM trends;"))
+            max_id = result.scalar()
+            # Sequence'i reset et
+            conn.execute(text(f"ALTER SEQUENCE trends_id_seq RESTART WITH {max_id + 1};"))
+            conn.commit()
+        return {"message": f"Sequence reset to {max_id + 1}"}
+    except Exception as e:
+        return {"error": str(e)}
