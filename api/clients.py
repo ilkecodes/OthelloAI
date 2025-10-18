@@ -74,3 +74,21 @@ def delete_client(client_id: str, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Client deleted successfully", "id": client_id}
+
+@router.patch("/{client_id}")
+def update_client(
+    client_id: str,
+    instagram_url: str = None,
+    db: Session = Depends(get_db)
+):
+    """Update client with Instagram URL"""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    if instagram_url:
+        client.instagram_url = instagram_url
+    
+    db.commit()
+    db.refresh(client)
+    return client
