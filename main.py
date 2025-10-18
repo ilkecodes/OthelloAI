@@ -49,3 +49,14 @@ def reset_trends_sequence():
         return {"message": f"Sequence reset to {max_id + 1}"}
     except Exception as e:
         return {"error": str(e)}
+@app.post("/admin/recreate-trends")
+def recreate_trends():
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS trends CASCADE;"))
+            conn.commit()
+        Base.metadata.create_all(bind=engine)
+        return {"message": "✅ Trends table recreated with correct schema"}
+    except Exception as e:
+        return {"error": str(e)}
