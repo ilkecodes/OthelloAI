@@ -1,0 +1,380 @@
+# api/brand_voice.py
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from sqlalchemy import text as sat
+import json
+import datetime
+
+router = APIRouter()
+
+# ---- Flexible imports (package layout'a dayanıklı) --------------------------
+try:
+    from database import get_db
+except ImportError:
+    try:
+        from app.database import get_db  # type: ignore
+    except ImportError:
+        raise
+
+try:
+    from models.brand_voice_models import (
+        BrandCorpus,
+        BrandVoiceProfile,
+        BrandEmbedding,
+        GenOutput,
+        Feedback,
+    )
+except ImportError:
+    from app.models.brand_voice_models import (  # type: ignore
+        BrandCorpus,
+        BrandVoiceProfile,
+        BrandEmbedding,
+        GenOutput,
+        Feedback,
+    )
+
+try:
+    from services.brand_voice_service import brand_voice_service
+except ImportError:
+    from app.services.brand_voice_service import brand_voice_service  # type: ignore
+
+# Instagram senkron servisi opsiyonel (yoksa endpoint 501 döner)
+instagram_sync = None
+try:
+    from services.instagram_sync import instagram_sync as _ig_sync
+    instagram_sync = _ig_sync
+except Exception:
+    try:
+        from app.services.instagram_sync import instagram_sync as _ig_sync  # type: ignore
+        instagram_sync = _ig_sync
+    except Exception:
+        instagram_sync = None
+
+
+# ---- Schemas ----------------------------------------------------------------
+class CorpusAdd(BaseModel):
+    client_id: str
+    source: str = "instagram"
+    texts: List[Dict[str, Any]]
+
+
+class BuildRequest(BaseModel):
+    client_id: str
+    texts: Optional[List[str]] = None
+
+
+class GenerateRequest(BaseModel):
+    client_id: str
+    platform: str
+    content_type: str
+    topic: str
+    goal: str
+
+
+# ---- Helpers ----------------------------------------------------------------
+def _ensure_profile(db: Session, client_id: str) -> Dict:
+    row = (
+        db.query(BrandVoiceProfile)
+        .filter(BrandVoiceProfile.client_id == client_id)
+        .first()
+    )
+    if not row or not row.profile:
+        raise HTTPException(status_code=404, detail="Brand voice profile not found")
+    return row.profile
+
+
+# ---- Endpoints ---------------------------------------------------------------
+@router.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "brand-voice"}
+
+
+@router.post("/corpus")
+def add_to_corpus(data: CorpusAdd, db: Session = Depends(get_db)):
+    """Add content to brand corpus"""
+    if not data.texts:
+        raise HTTPException(status_code=400, detail="texts is empty")
+
+    items: List[BrandCorpus] = []
+    for item in data.texts:
+        text_val = (item.get("text") or "").strip()
+        if not text_val:
+            continue
+        corpus_item = BrandCorpus(
+            client_id=data.client_id,
+            source=data.source,
+            text=text_val,
+            url=item.get("url"),
+            engagement_score=int(item.get("engagement_score") or 0),
+        )
+        db.add(corpus_item)
+        items.append(corpus_item)
+    db.commit()
+
+    texts = [it.text for it in items]
+    if texts:
+        embeddings = brand_voice_service.embed_texts(texts)
+        for it, emb in zip(items, embeddings):
+            db.add(
+                BrandEmbedding(
+                    client_id=data.client_id,
+                    text=it.text,
+                    source=data.source,
+                    embedding=emb,
+                )
+            )
+        db.commit()
+
+    return {
+        "ok": True,
+        "client_id": data.client_id,
+        "inserted": len(items),
+        "source": data.source,
+    }
+
+
+@router.post("/build")
+def build_brand_voice(req: BuildRequest, db: Session = Depends(get_db)):
+    """Build brand voice profile from corpus"""
+    texts: List[str]
+    if req.texts and len(req.texts) > 0:
+        texts = req.texts
+    else:
+        rows = (
+            db.query(BrandCorpus.text)
+            .filter(BrandCorpus.client_id == req.client_id)
+            .all()
+        )
+        texts = [r[0] for r in rows if r and r[0]]
+
+    profile = brand_voice_service.summarize_brand_voice(texts)
+
+    existing = (
+        db.query(BrandVoiceProfile)
+        .filter(BrandVoiceProfile.client_id == req.client_id)
+        .first()
+    )
+    if existing:
+        existing.profile = profile
+        existing.updated_at = datetime.datetime.utcnow()
+    else:
+        db.add(BrandVoiceProfile(client_id=req.client_id, profile=profile))
+    db.commit()
+
+    return {"ok": True, "client_id": req.client_id, "profile_status": "created"}
+
+
+@router.get("/get/{client_id}")
+def get_brand_voice(client_id: str, db: Session = Depends(get_db)):
+    row = (
+        db.query(BrandVoiceProfile)
+        .filter(BrandVoiceProfile.client_id == client_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Brand voice not found")
+    return {
+        "client_id": client_id,
+        "profile": row.profile,
+        "updated_at": row.updated_at,
+    }
+
+
+@router.post("/generate")
+def generate_content(req: GenerateRequest, db: Session = Depends(get_db)):
+    """Generate content with brand voice + RAG"""
+    profile = _ensure_profile(db, req.client_id)
+
+    q_emb = brand_voice_service.embed_texts([req.topic])[0]
+    passages = []
+    try:
+        sql = sat(
+            """
+            SELECT text
+            FROM brand_embeddings
+            WHERE client_id = :cid
+            ORDER BY embedding <=> :qvec
+            LIMIT 8
+            """
+        )
+        res = db.execute(sql, {"cid": req.client_id, "qvec": q_emb}).fetchall()
+        passages = [r[0] for r in res]
+    except Exception:
+        passages = []
+
+    prompt = f"""
+Role: Senior social media copywriter
+
+Brand Voice: {json.dumps(profile, ensure_ascii=False)}
+Few-Shot Examples: {json.dumps(profile.get('few_shots', []), ensure_ascii=False)}
+Context Passages: {json.dumps(passages, ensure_ascii=False)}
+
+Task:
+Platform: {req.platform}
+Content Type: {req.content_type}
+Topic: {req.topic}
+Goal: {req.goal}
+
+Output (JSON only):
+{{"title": "...", "hook": "...", "caption": "...", "hashtags": ["#..."], "cta": "...", "variants": [{{"caption": "..."}}]}}
+""".strip()
+
+    output: Dict[str, Any]
+    if getattr(brand_voice_service, "openai", None):
+        try:
+            resp = brand_voice_service.openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a senior social media copywriter. Return JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.8,
+                response_format={"type": "json_object"},
+            )
+            output = json.loads(resp.choices[0].message.content)
+        except Exception as e:
+            output = {
+                "title": req.topic.title(),
+                "hook": f"{req.topic} için hızlı bir fikir",
+                "caption": f"{req.topic} hakkında marka sesine uygun bir paylaşım taslağı.",
+                "hashtags": ["#brand", "#voice", "#draft"],
+                "cta": "Detaylar için mesaj at!",
+                "variants": [{"caption": "Alternatif kısa varyant."}],
+                "error": f"ai_failed: {e}",
+            }
+    else:
+        output = {
+            "title": req.topic.title(),
+            "hook": f"{req.topic} için hızlı bir fikir",
+            "caption": f"{req.topic} hakkında marka sesine uygun bir paylaşım taslağı.",
+            "hashtags": ["#brand", "#voice", "#draft"],
+            "cta": "Detaylar için mesaj at!",
+            "variants": [{"caption": "Alternatif kısa varyant."}],
+            "analysis_method": "no_ai_fallback",
+        }
+
+    db.add(
+        GenOutput(
+            client_id=req.client_id,
+            platform=req.platform,
+            content_type=req.content_type,
+            topic=req.topic,
+            goal=req.goal,
+            request_payload={
+                "platform": req.platform,
+                "content_type": req.content_type,
+                "topic": req.topic,
+                "goal": req.goal
+            },
+            output=output,
+        )
+    )
+    db.commit()
+
+    return output
+
+
+@router.get("/stats/{client_id}")
+def get_stats(client_id: str, db: Session = Depends(get_db)):
+    corpus_count = (
+        db.query(BrandCorpus).filter(BrandCorpus.client_id == client_id).count()
+    )
+    embed_count = (
+        db.query(BrandEmbedding).filter(BrandEmbedding.client_id == client_id).count()
+    )
+    outputs = (
+        db.query(GenOutput.id).filter(GenOutput.client_id == client_id).count()
+    )
+    has_profile = (
+        db.query(BrandVoiceProfile)
+        .filter(BrandVoiceProfile.client_id == client_id)
+        .first()
+        is not None
+    )
+    return {
+        "client_id": client_id,
+        "corpus_items": corpus_count,
+        "embeddings": embed_count,
+        "generated_outputs": outputs,
+        "has_profile": has_profile,
+    }
+
+
+@router.post("/sync-instagram")
+async def sync_instagram_profile(
+    client_id: str,
+    username: str,
+    max_posts: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Instagram auto-sync"""
+ try:
+        from agents.instagram_sync import instagram_sync
+    except ImportError:
+        from app.agents.instagram_sync import instagram_sync
+    
+    if instagram_sync is None or not instagram_sync.client:
+        raise HTTPException(
+            status_code=501,
+            detail="instagram_sync service not available - check APIFY_API_TOKEN",
+        )
+
+    posts = await instagram_sync.sync_profile(username, max_posts)
+    if not posts:
+        raise HTTPException(
+            status_code=400, detail="Instagram sync failed or no posts found"
+        )
+
+    added = 0
+    for post in posts:
+        text_val = (post.get("text") or "").strip()
+        if not text_val:
+            continue
+        corpus_item = BrandCorpus(
+            client_id=client_id,
+            source="instagram_auto",
+            text=text_val,
+            url=post.get("url"),
+            engagement_score=int(post.get("engagement_score") or 0),
+        )
+        db.add(corpus_item)
+        added += 1
+    db.commit()
+
+    emb_texts = [p.get("text") for p in posts if (p.get("text") or "").strip()]
+    if emb_texts:
+        vecs = brand_voice_service.embed_texts(emb_texts)
+        for t, v in zip(emb_texts, vecs):
+            db.add(
+                BrandEmbedding(
+                    client_id=client_id, text=t, source="instagram_auto", embedding=v
+                )
+            )
+        db.commit()
+
+    profile = brand_voice_service.summarize_brand_voice(emb_texts)
+
+    existing = (
+        db.query(BrandVoiceProfile)
+        .filter(BrandVoiceProfile.client_id == client_id)
+        .first()
+    )
+    if existing:
+        existing.profile = profile
+        existing.updated_at = datetime.datetime.utcnow()
+    else:
+        db.add(BrandVoiceProfile(client_id=client_id, profile=profile))
+    db.commit()
+
+    return {
+        "success": True,
+        "client_id": client_id,
+        "posts_synced": added,
+        "profile": profile,
+    }

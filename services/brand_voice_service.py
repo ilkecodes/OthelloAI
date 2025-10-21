@@ -1,108 +1,84 @@
-"""
-Brand Voice Service - İzole, sadece brand voice işlemleri
-"""
-import re
-import hashlib
-from typing import List, Dict
-
-EMBED_DIM = 384
+import os
+import json
+from typing import List, Dict, Any
+from openai import OpenAI
 
 class BrandVoiceService:
+    def __init__(self):
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.openai = OpenAI(api_key=api_key) if api_key else None
+        print(f"✅ BrandVoiceService initialized (OpenAI: {bool(self.openai)})")
     
-    def summarize_brand_voice(self, texts: List[str]) -> Dict:
-        """Extract brand voice from corpus"""
+    def embed_texts(self, texts: List[str]) -> List[str]:
+        """Generate embeddings and return as JSON strings"""
+        if not self.openai:
+            return ['[0.0]' * 384 for _ in texts]
         
+        try:
+            response = self.openai.embeddings.create(
+                model="text-embedding-3-small",
+                input=[t[:8000] for t in texts]
+            )
+            # Return as JSON strings for TEXT column
+            return [json.dumps(data.embedding) for data in response.data]
+        except Exception as e:
+            print(f"❌ Embedding error: {e}")
+            return ['[0.0]' * 384 for _ in texts]
+    
+    def summarize_brand_voice(self, texts: List[str]) -> Dict[str, Any]:
+        """Analyze texts and create brand voice profile"""
         if not texts:
-            return self._empty_profile()
+            return {"error": "No texts provided"}
         
-        all_txt = "\n".join(texts)
-        sentences = [s.strip() for s in re.split(r"[.!?]\s+", all_txt) if s.strip()]
-        words = re.findall(r"\w+", all_txt.lower())
-        emojis = re.findall(r"[\U0001F300-\U0001FAFF]", all_txt)
-        excls = all_txt.count("!")
-        qmarks = all_txt.count("?")
+        if not self.openai:
+            return {
+                "tone": "professional",
+                "language_style": "formal",
+                "emoji_usage": "moderate",
+                "few_shots": texts[:3]
+            }
         
-        avg_sentence_len = sum(len(s.split()) for s in sentences) / max(1, len(sentences))
-        emoji_rate = len(emojis) / max(1, len(words))
-        ex_ratio = excls / max(1, len(sentences))
-        q_ratio = qmarks / max(1, len(sentences))
+        sample = "\n---\n".join(texts[:10])
         
-        tone = {
-            "sicaklik": min(1.0, 0.3 + emoji_rate * 5),
-            "mizah": min(1.0, q_ratio * 2 + emoji_rate),
-            "enerji": min(1.0, ex_ratio * 3 + 0.2),
-            "resmiyet": max(0.0, 1.0 - (emoji_rate * 4 + ex_ratio))
-        }
-        
-        style = {
-            "cumle_uzunlugu": "kısa" if avg_sentence_len < 10 else "orta" if avg_sentence_len < 18 else "uzun",
-            "emoji_kullanimi": "yüksek" if emoji_rate > 0.01 else "orta" if emoji_rate > 0.002 else "düşük",
-            "soru_orani": round(q_ratio, 2),
-            "unlem_orani": round(ex_ratio, 2)
-        }
-        
-        lexicon = self._extract_lexicon(words)
-        few_shots = self._extract_few_shots(sentences)
-        cta_patterns = self._extract_cta_patterns(sentences)
-        
-        return {
-            "tone": tone,
-            "style": style,
-            "lexicon": lexicon,
-            "dos": ["samimi hitap", "kısa cümleler", "net CTA"],
-            "donts": ["agresif satış", "abartılı iddia", "çok teknik dil"],
-            "cta_patterns": cta_patterns,
-            "few_shots": few_shots
-        }
-    
-    def _extract_lexicon(self, words: List[str]) -> List[str]:
-        stopwords = set([
-            "ve","de","da","ile","için","bir","çok","biz","siz","bu","şu","o",
-            "ama","fakat","the","a","to","of","in","on","is","and","or","but"
-        ])
-        
-        freq = {}
-        for w in words:
-            if w in stopwords or len(w) < 3:
-                continue
-            freq[w] = freq.get(w, 0) + 1
-        
-        return [w for w, _ in sorted(freq.items(), key=lambda x: -x[1])[:12]]
-    
-    def _extract_few_shots(self, sentences: List[str]) -> List[Dict]:
-        captions = sorted([s for s in sentences if len(s) > 20], key=lambda s: -len(s))[:3]
-        return [{"caption": c, "notes": "yüksek engagement"} for c in captions]
-    
-    def _extract_cta_patterns(self, sentences: List[str]) -> List[str]:
-        cta_keywords = ["hemen", "şimdi", "keşfet", "dene", "yaz", "gönder", "tıkla", "bak"]
-        patterns = []
-        
-        for s in sentences:
-            s_lower = s.lower()
-            if any(kw in s_lower for kw in cta_keywords):
-                patterns.append(s[:50])
-        
-        return list(set(patterns))[:5]
-    
-    def _empty_profile(self) -> Dict:
-        return {
-            "tone": {"sicaklik": 0.5, "mizah": 0.3, "enerji": 0.5, "resmiyet": 0.5},
-            "style": {"cumle_uzunlugu": "orta", "emoji_kullanimi": "orta"},
-            "lexicon": [],
-            "dos": [],
-            "donts": [],
-            "cta_patterns": [],
-            "few_shots": []
-        }
-    
-    def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """Generate pseudo-embeddings (replace with OpenAI later)"""
-        embeddings = []
-        for t in texts:
-            h = hashlib.sha256(t.encode("utf-8")).digest()
-            vec = [(h[i % len(h)] / 255.0) for i in range(EMBED_DIM)]
-            embeddings.append(vec)
-        return embeddings
+        prompt = f"""Analyze this brand's content:
 
-# Singleton
+{sample}
+
+Return ONLY valid JSON:
+{{
+  "tone": "samimi/profesyonel/eğlenceli",
+  "language_style": "günlük/formal/teknik",
+  "emoji_usage": "sık/orta/nadir",
+  "themes": ["tema1", "tema2"],
+  "personality": ["özellik1", "özellik2"],
+  "hashtag_strategy": "açıklama",
+  "few_shots": ["örnek1", "örnek2"]
+}}"""
+
+        try:
+            response = self.openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a brand analyst. Return only JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+            
+            profile = json.loads(response.choices[0].message.content)
+            profile["few_shots"] = texts[:5]
+            return profile
+            
+        except Exception as e:
+            print(f"❌ Brand voice analysis error: {e}")
+            return {
+                "tone": "professional",
+                "language_style": "formal",
+                "emoji_usage": "moderate",
+                "few_shots": texts[:3],
+                "error": str(e)
+            }
+
+# Create singleton
 brand_voice_service = BrandVoiceService()
