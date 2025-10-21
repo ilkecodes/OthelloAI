@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 app = FastAPI()
 
@@ -62,3 +63,15 @@ def recreate_trends():
         return {"message": "✅ Trends table recreated with correct schema"}
     except Exception as e:
         return {"error": str(e)}
+
+_ENABLE_BRAND_VOICE = os.getenv("ENABLE_BRAND_VOICE", "false").lower() == "true"
+
+if _ENABLE_BRAND_VOICE:
+    try:
+        from api.brand_voice import router as brand_voice_router
+        app.include_router(brand_voice_router, prefix="/api/brand-voice", tags=["brand-voice"])
+        print("✅ Brand Voice System: ENABLED")
+    except Exception as e:
+        print(f"⚠️  Brand Voice System: Failed to load - {e}")
+else:
+    print("⚠️  Brand Voice System: DISABLED (set ENABLE_BRAND_VOICE=true)")
