@@ -7,6 +7,7 @@ from sqlalchemy import text as sat
 import json
 import datetime
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,15 @@ class GenerateRequest(BaseModel):
     goal: str
 
 
+class GenerateFromUrlRequest(BaseModel):
+    client_id: str
+    instagram_url: str
+    topic: str
+    platform: str = "instagram"
+    goal: str = "engagement"
+    max_posts: int = 15
+
+
 # ---- Helpers ----
 def _ensure_profile(db: Session, client_id: str) -> Dict:
     row = (
@@ -112,7 +122,7 @@ def add_to_corpus(data: CorpusAdd, db: Session = Depends(get_db)):
         )
         db.add(corpus_item)
         items.append(corpus_item)
-    
+
     try:
         db.commit()
     except Exception as e:
@@ -137,7 +147,6 @@ def add_to_corpus(data: CorpusAdd, db: Session = Depends(get_db)):
         except Exception as e:
             logger.error(f"❌ Embedding error: {e}")
             db.rollback()
-            # Continue without embeddings
 
     return {
         "ok": True,
@@ -177,11 +186,11 @@ def build_brand_voice(req: BuildRequest, db: Session = Depends(get_db)):
             existing.updated_at = datetime.datetime.utcnow()
         else:
             db.add(BrandVoiceProfile(client_id=req.client_id, profile=profile))
-        
+
         db.commit()
 
         return {"ok": True, "client_id": req.client_id, "profile_status": "created"}
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -210,10 +219,9 @@ def get_brand_voice(client_id: str, db: Session = Depends(get_db)):
 @router.post("/generate")
 def generate_content(req: GenerateRequest, db: Session = Depends(get_db)):
     """Generate content with brand voice + RAG"""
-    
     try:
         profile = _ensure_profile(db, req.client_id)
-        
+
         # Get embeddings for RAG
         q_emb = brand_voice_service.embed_texts([req.topic])[0]
         passages = []
@@ -301,24 +309,195 @@ Output (JSON only):
                         "platform": req.platform,
                         "content_type": req.content_type,
                         "topic": req.topic,
-                        "goal": req.goal
+                        "goal": req.goal,
                     },
                     output=output,
                 )
             )
             db.commit()
-            logger.info(f"✅ Content saved to database")
+            logger.info("✅ Content saved to database")
         except Exception as db_error:
             logger.error(f"❌ DB save error: {db_error}")
             db.rollback()
-            # Continue without saving
 
         return output
-    
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ Content generation error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate-from-url")
+async def generate_from_url(
+    req: GenerateFromUrlRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Generate content directly from Instagram URL:
+    1. Fetch posts from Instagram
+    2. Create/update brand voice
+    3. Generate content with RAG
+    """
+    # instagram_sync was resolved at module import time (optional feature)
+    if instagram_sync is None or not getattr(instagram_sync, "client", None):
+        raise HTTPException(
+            status_code=501,
+            detail="Instagram sync not available - check APIFY_API_TOKEN",
+        )
+
+    try:
+        # Extract username
+        match = re.search(r"instagram\.com/([^/?]+)", req.instagram_url)
+        if not match:
+            raise HTTPException(status_code=400, detail="Invalid Instagram URL")
+        username = match.group(1)
+
+        logger.info(f"🔍 Processing @{username} for content generation")
+
+        # Sync posts
+        posts = await instagram_sync.sync_profile(username, req.max_posts)
+        if not posts:
+            raise HTTPException(status_code=400, detail="No posts found")
+
+        # Add to corpus
+        added = 0
+        for post in posts:
+            text_val = (post.get("text") or "").strip()
+            if not text_val:
+                continue
+            corpus_item = BrandCorpus(
+                client_id=req.client_id,
+                source="instagram_auto",
+                text=text_val,
+                url=post.get("url"),
+                engagement_score=int(post.get("engagement_score") or 0),
+            )
+            db.add(corpus_item)
+            added += 1
+        db.commit()
+
+        # Generate embeddings
+        emb_texts = [p.get("text") for p in posts if (p.get("text") or "").strip()]
+        if emb_texts:
+            try:
+                vecs = brand_voice_service.embed_texts(emb_texts)
+                for t, v in zip(emb_texts, vecs):
+                    db.add(
+                        BrandEmbedding(
+                            client_id=req.client_id,
+                            text=t,
+                            source="instagram_auto",
+                            embedding=v,
+                        )
+                    )
+                db.commit()
+            except Exception as e:
+                logger.error(f"Embedding error: {e}")
+                db.rollback()
+
+        # Build brand voice
+        profile = brand_voice_service.summarize_brand_voice(emb_texts)
+
+        existing = (
+            db.query(BrandVoiceProfile)
+            .filter(BrandVoiceProfile.client_id == req.client_id)
+            .first()
+        )
+        if existing:
+            existing.profile = profile
+            existing.updated_at = datetime.datetime.utcnow()
+        else:
+            db.add(BrandVoiceProfile(client_id=req.client_id, profile=profile))
+        db.commit()
+
+        logger.info(f"✅ Brand voice created from @{username}")
+
+        # RAG: Find similar content
+        q_emb = brand_voice_service.embed_texts([req.topic])[0]
+        passages = []
+        try:
+            sql = sat(
+                """
+                SELECT text
+                FROM brand_embeddings
+                WHERE client_id = :cid
+                ORDER BY embedding <=> :qvec
+                LIMIT 5
+                """
+            )
+            res = db.execute(sql, {"cid": req.client_id, "qvec": q_emb}).fetchall()
+            passages = [r[0] for r in res]
+        except Exception:
+            passages = []
+
+        # Generate content
+        prompt = f"""
+Role: Senior social media copywriter
+
+Brand Voice: {json.dumps(profile, ensure_ascii=False)}
+Few-Shot Examples: {json.dumps(profile.get('few_shots', [])[:3], ensure_ascii=False)}
+Similar Content (RAG): {json.dumps(passages, ensure_ascii=False)}
+
+Task:
+Platform: {req.platform}
+Topic: {req.topic}
+Goal: {req.goal}
+
+Create content matching this exact brand voice.
+
+Output (JSON only):
+{{"title": "...", "hook": "...", "caption": "...", "hashtags": ["#..."], "cta": "..."}}
+""".strip()
+
+        output: Dict[str, Any] = {}
+        if getattr(brand_voice_service, "openai", None):
+            try:
+                resp = brand_voice_service.openai.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Social media copywriter. Return JSON only.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.8,
+                    response_format={"type": "json_object"},
+                )
+                output = json.loads(resp.choices[0].message.content)
+            except Exception as e:
+                logger.error(f"Generation error: {e}")
+                output = {
+                    "title": req.topic,
+                    "caption": f"Content about {req.topic}",
+                    "hashtags": ["#brand"],
+                    "error": str(e),
+                }
+        else:
+            output = {
+                "title": req.topic,
+                "caption": f"Content about {req.topic}",
+                "hashtags": ["#brand"],
+                "note": "no_ai_fallback",
+            }
+
+        return {
+            "success": True,
+            "username": username,
+            "posts_synced": added,
+            "brand_voice": profile,
+            "generated_content": output,
+            "rag_used": len(passages) > 0,
+            "rag_passages_count": len(passages),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Generate from URL error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -332,9 +511,7 @@ def get_stats(client_id: str, db: Session = Depends(get_db)):
     embed_count = (
         db.query(BrandEmbedding).filter(BrandEmbedding.client_id == client_id).count()
     )
-    outputs = (
-        db.query(GenOutput.id).filter(GenOutput.client_id == client_id).count()
-    )
+    outputs = db.query(GenOutput.id).filter(GenOutput.client_id == client_id).count()
     has_profile = (
         db.query(BrandVoiceProfile)
         .filter(BrandVoiceProfile.client_id == client_id)
@@ -358,12 +535,7 @@ async def sync_instagram_profile(
     db: Session = Depends(get_db),
 ):
     """Instagram auto-sync"""
-    try:
-        from agents.instagram_sync import instagram_sync
-    except ImportError:
-        from app.agents.instagram_sync import instagram_sync
-    
-    if instagram_sync is None or not instagram_sync.client:
+    if instagram_sync is None or not getattr(instagram_sync, "client", None):
         raise HTTPException(
             status_code=501,
             detail="instagram_sync service not available - check APIFY_API_TOKEN",
@@ -399,7 +571,10 @@ async def sync_instagram_profile(
                 for t, v in zip(emb_texts, vecs):
                     db.add(
                         BrandEmbedding(
-                            client_id=client_id, text=t, source="instagram_auto", embedding=v
+                            client_id=client_id,
+                            text=t,
+                            source="instagram_auto",
+                            embedding=v,
                         )
                     )
                 db.commit()
@@ -433,3 +608,4 @@ async def sync_instagram_profile(
         logger.error(f"❌ Instagram sync error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+

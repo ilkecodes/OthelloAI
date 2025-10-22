@@ -9,7 +9,7 @@ try:
 except Exception:
     pass
 
-app = FastAPI(title="OthelloAI Marketing Platform", redirect_slashes=False)
+app = FastAPI(title="OthelloAI Marketing Platform", redirect_slashes=True)
 
 # CORS
 app.add_middleware(
