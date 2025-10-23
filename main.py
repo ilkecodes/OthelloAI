@@ -6,6 +6,7 @@ import os
 load_dotenv()
 
 from database import engine, Base, Client, Trend, Influencer, Content
+from database import BrandCorpus, BrandVoiceProfile, GeneratedContent, ContentFeedback
 
 print("📊 Creating database tables...")
 Base.metadata.create_all(bind=engine)
@@ -29,11 +30,13 @@ from api.clients import router as clients_router
 from api.trends import router as trends_router
 from api.content import router as content_router
 from api.influencers import router as influencers_router
+from brand_voice_api import router as brand_voice_router
 
 app.include_router(clients_router, prefix="/api/clients", tags=["clients"])
 app.include_router(trends_router, prefix="/api/trends", tags=["trends"])
 app.include_router(content_router, prefix="/api/content", tags=["content"])
 app.include_router(influencers_router, prefix="/api/influencers", tags=["influencers"])
+app.include_router(brand_voice_router, prefix="/api/brand-voice", tags=["brand-voice"])
 
 @app.get("/")
 def read_root():
@@ -41,7 +44,7 @@ def read_root():
         "status": "healthy",
         "service": "OthelloAI Marketing Platform API",
         "version": "2.0.0",
-        "features": ["clients", "trends", "content", "influencers"]
+        "features": ["clients", "trends", "content", "influencers", "brand-voice"]
     }
 
 @app.get("/health")

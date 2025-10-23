@@ -19,7 +19,8 @@ def get_db():
     finally:
         db.close()
 
-# MODELS
+# ============= ESKİ MODELLER =============
+
 class Client(Base):
     __tablename__ = "clients"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -65,3 +66,80 @@ class Content(Base):
     scheduled_time = Column(DateTime)
     created_at = Column(DateTime, default=datetime.now)
     client = relationship("Client", backref="contents")
+
+# ============= BRAND VOICE MODELLER =============
+
+class BrandCorpus(Base):
+    """Marka içerikleri"""
+    __tablename__ = "brand_corpus"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    client_id = Column(String, ForeignKey("clients.id"), nullable=False)
+    platform = Column(String(50), nullable=False)
+    content_type = Column(String(50))
+    text_content = Column(Text, nullable=False)
+    post_metadata = Column(JSON)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    client = relationship("Client", backref="corpus_items", foreign_keys=[client_id])
+
+class BrandVoiceProfile(Base):
+    """AI marka sesi profili"""
+    __tablename__ = "brand_voice_profiles"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    client_id = Column(String, ForeignKey("clients.id"), nullable=False, unique=True)
+    
+    tone = Column(String(100))
+    language_style = Column(String(100))
+    emoji_usage = Column(String(50))
+    content_themes = Column(JSON)
+    brand_personality = Column(JSON)
+    hashtag_strategy = Column(String(200))
+    
+    sample_size = Column(Integer, default=0)
+    confidence_score = Column(Float, default=0.0)
+    voice_summary = Column(Text)
+    
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    client = relationship("Client", backref="brand_voice", foreign_keys=[client_id])
+
+class GeneratedContent(Base):
+    """Üretilen içerikler"""
+    __tablename__ = "generated_contents"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    client_id = Column(String, ForeignKey("clients.id"), nullable=False)
+    profile_id = Column(String, ForeignKey("brand_voice_profiles.id"))
+    
+    platform = Column(String(50), nullable=False)
+    content_text = Column(Text, nullable=False)
+    prompt_used = Column(Text)
+    
+    user_rating = Column(Integer)
+    is_approved = Column(String(20), default="pending")
+    feedback_notes = Column(Text)
+    
+    created_at = Column(DateTime, default=datetime.now)
+    
+    client = relationship("Client", backref="generated_contents", foreign_keys=[client_id])
+    profile = relationship("BrandVoiceProfile", backref="generated_contents", foreign_keys=[profile_id])
+
+class ContentFeedback(Base):
+    """Feedback sistemi"""
+    __tablename__ = "content_feedback"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    content_id = Column(String, ForeignKey("generated_contents.id"))
+    client_id = Column(String, ForeignKey("clients.id"))
+    
+    rating = Column(Integer)
+    feedback_type = Column(String(50))
+    notes = Column(Text)
+    
+    created_at = Column(DateTime, default=datetime.now)
+    
+    content = relationship("GeneratedContent", backref="feedback_items", foreign_keys=[content_id])
+    client = relationship("Client", backref="feedback_items", foreign_keys=[client_id])
