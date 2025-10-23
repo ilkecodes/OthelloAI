@@ -89,7 +89,7 @@ class BrandCorpus(Base):
     platform = Column(String(50), nullable=False)
     content_type = Column(String(50))
     text_content = Column(Text, nullable=False)
-    metadata = Column(JSON)
+    post_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.now)
     
     client = relationship("Client", backref="corpus_items")

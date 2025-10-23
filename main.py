@@ -3,20 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 
-# Load environment variables FIRST
 load_dotenv()
 
 from database import engine, Base, Client, Trend, Influencer, Content
 from database import BrandCorpus, BrandVoiceProfile, GeneratedContent, ContentFeedback
 
-# Import routers
 from clients import router as clients_router
 from trends import router as trends_router
 from content import router as content_router
 from influencers import router as influencers_router
 from brand_voice_api import router as brand_voice_router
 
-# Create tables
 print("📊 Creating database tables...")
 Base.metadata.create_all(bind=engine)
 print("✅ Database tables created")
@@ -36,7 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
 app.include_router(clients_router, prefix="/api/clients", tags=["clients"])
 app.include_router(trends_router, prefix="/api/trends", tags=["trends"])
 app.include_router(content_router, prefix="/api/content", tags=["content"])

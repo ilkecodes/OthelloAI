@@ -11,24 +11,11 @@ class BrandVoiceService:
         self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
     def analyze_brand_voice(self, corpus_items: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Marka içeriklerini analiz edip brand voice profili çıkar
-        
-        Args:
-            corpus_items: [{text_content, metadata}, ...]
-        
-        Returns:
-            {
-                tone, language_style, emoji_usage,
-                content_themes, brand_personality,
-                hashtag_strategy, voice_summary, confidence_score
-            }
-        """
+        """Marka içeriklerini analiz edip brand voice profili çıkar"""
         
         if not corpus_items:
             return self._default_voice_profile()
         
-        # İçerikleri hazırla
         sample_texts = [item.get('text_content', '')[:300] for item in corpus_items[:20]]
         combined_text = "\n---\n".join(sample_texts)
         
@@ -40,15 +27,15 @@ class BrandVoiceService:
 GÖREV: Bu içeriklerin ortak özelliklerini çıkar ve JSON formatında döndür.
 
 Analiz edilecek özellikler:
-1. TONE (Genel Ton): professional/casual/friendly/authoritative/playful
+1. TONE: professional/casual/friendly/authoritative/playful
 2. LANGUAGE_STYLE: formal/conversational/technical/storytelling
 3. EMOJI_USAGE: frequent/moderate/minimal/none
 4. CONTENT_THEMES: ["education", "entertainment", "sales", "community", "inspiration"]
-5. BRAND_PERSONALITY: ["innovative", "trustworthy", "fun", "expert", "relatable"] (3-5 kelime)
-6. HASHTAG_STRATEGY: "3-5 relevant hashtags" / "minimal hashtag use" / etc.
-7. VOICE_SUMMARY: Bu markayı anlatan 2-3 cümlelik özet (içerik üretiminde kullanılacak)
+5. BRAND_PERSONALITY: ["innovative", "trustworthy", "fun", "expert", "relatable"]
+6. HASHTAG_STRATEGY: "3-5 relevant hashtags" / "minimal hashtag use"
+7. VOICE_SUMMARY: Bu markayı anlatan 2-3 cümlelik özet
 
-ÇIKTI (sadece JSON, başka bir şey yazma):
+ÇIKTI (sadece JSON):
 {{
   "tone": "",
   "language_style": "",
@@ -73,7 +60,6 @@ Analiz edilecek özellikler:
             
             content = response.choices[0].message.content.strip()
             
-            # Markdown code block temizle
             if content.startswith('```'):
                 content = content.split('```')[1]
                 if content.startswith('json'):
@@ -95,15 +81,7 @@ Analiz edilecek özellikler:
         platform: str = "instagram",
         content_type: str = "post"
     ) -> str:
-        """
-        Marka sesine uygun içerik üret
-        
-        Args:
-            voice_profile: BrandVoiceProfile'dan gelen profil
-            prompt: Kullanıcının isteği (örn: "yeni ürün tanıtımı")
-            platform: instagram/twitter/linkedin
-            content_type: post/story/reel/tweet
-        """
+        """Marka sesine uygun içerik üret"""
         
         voice_summary = voice_profile.get('voice_summary', '')
         tone = voice_profile.get('tone', 'professional')
@@ -125,9 +103,9 @@ MARKA SESİ PROFİLİ:
 ÖNEMLİ: Bu markanın stilini BIREBIR taklit et. Aynı ton, aynı üslup, aynı enerji!"""
 
         platform_instructions = {
-            "instagram": "Instagram için caption yaz. Emoji kullanabilirsin. Caption uzun olabilir.",
+            "instagram": "Instagram için caption yaz. Emoji kullanabilirsin.",
             "twitter": "280 karakter sınırına uy. Kısa ve çarpıcı ol.",
-            "linkedin": "Profesyonel ton kullan. Daha uzun ve detaylı olabilir."
+            "linkedin": "Profesyonel ton kullan."
         }
         
         user_prompt = f"""PLATFORM: {platform}
@@ -156,7 +134,7 @@ Sadece içeriği yaz, başka bir şey ekleme."""
             return "İçerik üretilemedi. Lütfen tekrar deneyin."
     
     def _default_voice_profile(self) -> Dict[str, Any]:
-        """Varsayılan profil (içerik yoksa)"""
+        """Varsayılan profil"""
         return {
             "tone": "professional",
             "language_style": "conversational",
@@ -164,10 +142,9 @@ Sadece içeriği yaz, başka bir şey ekleme."""
             "content_themes": ["general"],
             "brand_personality": ["authentic", "trustworthy"],
             "hashtag_strategy": "3-5 relevant hashtags",
-            "voice_summary": "Professional and authentic brand communication with a conversational tone.",
+            "voice_summary": "Professional and authentic brand communication.",
             "confidence_score": 50,
             "sample_size": 0
         }
 
-# Singleton instance
 brand_voice_service = BrandVoiceService()

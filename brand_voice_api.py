@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from database import get_db, Client
-from brand_voice_models import BrandCorpus, BrandVoiceProfile, GeneratedContent, ContentFeedback
+from database import BrandCorpus, BrandVoiceProfile, GeneratedContent, ContentFeedback
 from brand_voice_service import brand_voice_service
 
 router = APIRouter()
@@ -17,7 +17,7 @@ class CorpusItemCreate(BaseModel):
     platform: str
     content_type: Optional[str] = "post"
     text_content: str
-    metadata: Optional[dict] = {}
+    post_metadata: Optional[dict] = {}
 
 class BuildVoiceRequest(BaseModel):
     client_id: str
@@ -31,7 +31,7 @@ class GenerateContentRequest(BaseModel):
 
 class ContentFeedbackCreate(BaseModel):
     content_id: str
-    rating: int  # 1-5
+    rating: int
     feedback_type: str
     notes: Optional[str] = None
 
@@ -49,11 +49,8 @@ def health_check():
 
 @router.post("/corpus")
 def add_corpus_item(item: CorpusItemCreate, db: Session = Depends(get_db)):
-    """
-    Marka içeriği ekle (manuel veya otomatik sync)
-    """
+    """Marka içeriği ekle"""
     
-    # Client kontrolü
     client = db.query(Client).filter(Client.id == item.client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -63,7 +60,7 @@ def add_corpus_item(item: CorpusItemCreate, db: Session = Depends(get_db)):
         platform=item.platform,
         content_type=item.content_type,
         text_content=item.text_content,
-        metadata=item.metadata
+        post_metadata=item.post_metadata
     )
     
     db.add(corpus_item)
@@ -78,16 +75,12 @@ def add_corpus_item(item: CorpusItemCreate, db: Session = Depends(get_db)):
 
 @router.post("/build")
 async def build_brand_voice(request: BuildVoiceRequest, db: Session = Depends(get_db)):
-    """
-    Marka sesini analiz et ve profil oluştur
-    """
+    """Marka sesini analiz et ve profil oluştur"""
     
-    # Client kontrolü
     client = db.query(Client).filter(Client.id == request.client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    # Mevcut profil var mı?
     existing_profile = db.query(BrandVoiceProfile).filter(
         BrandVoiceProfile.client_id == request.client_id
     ).first()
@@ -99,7 +92,6 @@ async def build_brand_voice(request: BuildVoiceRequest, db: Session = Depends(ge
             "use_force_rebuild": True
         }
     
-    # Corpus'tan içerikleri al
     corpus_items = db.query(BrandCorpus).filter(
         BrandCorpus.client_id == request.client_id
     ).all()
@@ -110,22 +102,19 @@ async def build_brand_voice(request: BuildVoiceRequest, db: Session = Depends(ge
             detail="No corpus items found. Add content first using /corpus endpoint"
         )
     
-    # AI ile analiz et
     print(f"🔍 Analyzing brand voice for {client.name} with {len(corpus_items)} items...")
     
     corpus_data = [
         {
             "text_content": item.text_content,
-            "metadata": item.metadata
+            "post_metadata": item.post_metadata
         }
         for item in corpus_items
     ]
     
     voice_data = brand_voice_service.analyze_brand_voice(corpus_data)
     
-    # Profil oluştur veya güncelle
     if existing_profile:
-        # Güncelle
         existing_profile.tone = voice_data.get('tone')
         existing_profile.language_style = voice_data.get('language_style')
         existing_profile.emoji_usage = voice_data.get('emoji_usage')
@@ -139,7 +128,6 @@ async def build_brand_voice(request: BuildVoiceRequest, db: Session = Depends(ge
         
         profile = existing_profile
     else:
-        # Yeni oluştur
         profile = BrandVoiceProfile(
             client_id=request.client_id,
             tone=voice_data.get('tone'),
@@ -207,16 +195,12 @@ def get_brand_voice(client_id: str, db: Session = Depends(get_db)):
 
 @router.post("/generate")
 async def generate_content(request: GenerateContentRequest, db: Session = Depends(get_db)):
-    """
-    Marka sesine uygun içerik üret
-    """
+    """Marka sesine uygun içerik üret"""
     
-    # Client kontrolü
     client = db.query(Client).filter(Client.id == request.client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    # Brand voice profili al
     profile = db.query(BrandVoiceProfile).filter(
         BrandVoiceProfile.client_id == request.client_id
     ).first()
@@ -227,7 +211,6 @@ async def generate_content(request: GenerateContentRequest, db: Session = Depend
             detail="Brand voice profile not found. Build it first using /build endpoint"
         )
     
-    # Profili dict'e çevir
     voice_profile = {
         "tone": profile.tone,
         "language_style": profile.language_style,
@@ -238,7 +221,6 @@ async def generate_content(request: GenerateContentRequest, db: Session = Depend
         "voice_summary": profile.voice_summary
     }
     
-    # İçerik üret
     print(f"🎨 Generating content for {client.name}...")
     
     generated_text = brand_voice_service.generate_branded_content(
@@ -248,7 +230,6 @@ async def generate_content(request: GenerateContentRequest, db: Session = Depend
         content_type=request.content_type
     )
     
-    # Database'e kaydet
     content = GeneratedContent(
         client_id=request.client_id,
         profile_id=profile.id,
@@ -298,7 +279,7 @@ def get_stats(client_id: str, db: Session = Depends(get_db)):
 
 @router.post("/feedback")
 def add_feedback(feedback: ContentFeedbackCreate, db: Session = Depends(get_db)):
-    """İçerik feedback'i ekle (RL için)"""
+    """İçerik feedback'i ekle"""
     
     content = db.query(GeneratedContent).filter(
         GeneratedContent.id == feedback.content_id
@@ -307,14 +288,12 @@ def add_feedback(feedback: ContentFeedbackCreate, db: Session = Depends(get_db))
     if not content:
         raise HTTPException(status_code=404, detail="Content not found")
     
-    # Content'e rating ekle
     content.user_rating = feedback.rating
     if feedback.rating >= 4:
         content.is_approved = "approved"
     elif feedback.rating <= 2:
         content.is_approved = "rejected"
     
-    # Feedback kaydı oluştur
     feedback_record = ContentFeedback(
         content_id=feedback.content_id,
         client_id=content.client_id,
