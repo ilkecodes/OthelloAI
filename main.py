@@ -8,7 +8,18 @@ load_dotenv()
 from database import engine, Base, Client, Trend, Influencer, Content
 from database import BrandCorpus, BrandVoiceProfile, GeneratedContent, ContentFeedback
 
-print("📊 Creating database tables...")
+# ESKİ BRAND VOICE TABLOLARINI SİL
+print("🗑️  Cleaning old Brand Voice tables...")
+from sqlalchemy import text
+with engine.connect() as conn:
+    conn.execute(text("DROP TABLE IF EXISTS content_feedback CASCADE;"))
+    conn.execute(text("DROP TABLE IF EXISTS generated_contents CASCADE;"))
+    conn.execute(text("DROP TABLE IF EXISTS brand_voice_profiles CASCADE;"))
+    conn.execute(text("DROP TABLE IF EXISTS brand_corpus CASCADE;"))
+    conn.commit()
+print("✅ Old tables dropped")
+
+print("📊 Creating fresh database tables...")
 Base.metadata.create_all(bind=engine)
 print("✅ Database tables created")
 
