@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -163,6 +163,28 @@ def generate_content(request: GenerateContentRequest, db: Session = Depends(get_
         "platform": request.platform
     }
 
+@router.get("/stats/{client_id}")
+def get_stats(client_id: str, db: Session = Depends(get_db)):
+    corpus_count = db.query(BrandCorpus).filter(
+        BrandCorpus.client_id == client_id
+    ).count()
+    
+    generated_count = db.query(GeneratedContent).filter(
+        GeneratedContent.client_id == client_id
+    ).count()
+    
+    profile = db.query(BrandVoiceProfile).filter(
+        BrandVoiceProfile.client_id == client_id
+    ).first()
+    
+    return {
+        "client_id": client_id,
+        "corpus_items": corpus_count,
+        "generated_contents": generated_count,
+        "has_profile": profile is not None,
+        "confidence_score": profile.confidence_score if profile else 0
+    }
+
 # ============= INSTAGRAM AUTO-SYNC =============
 
 @router.post("/sync-instagram")
@@ -172,23 +194,44 @@ async def sync_instagram(
     max_posts: int = 15,
     db: Session = Depends(get_db)
 ):
-    """Instagram profilinden otomatik içerik çek ve corpus'a ekle"""
+    """Instagram profilinden otomatik içerik çek"""
+    
+    # URL'den username'i temizle
+    username = instagram_username.replace('https://www.instagram.com/', '').replace('/', '').strip()
     
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
     try:
-        # Apify ile Instagram profil scrape
-        from apify_scanner import ApifyScanner
-        scanner = ApifyScanner()
+        print(f"📸 Syncing Instagram @{username}...")
         
-        print(f"📸 Syncing Instagram @{instagram_username}...")
+        # Apify import
+        import os
+        from apify_client import ApifyClient
         
-        posts = await scanner.scan_instagram_profile(instagram_username, max_posts=max_posts)
+        apify_token = os.getenv("APIFY_API_TOKEN")
+        if not apify_token:
+            raise HTTPException(status_code=400, detail="Apify token not configured")
+        
+        apify_client = ApifyClient(apify_token)
+        
+        # Instagram profile scraper
+        run_input = {
+            "usernames": [username],
+            "resultsLimit": max_posts
+        }
+        
+        run = apify_client.actor("apify/instagram-profile-scraper").call(run_input=run_input)
+        
+        posts = []
+        for item in apify_client.dataset(run["defaultDatasetId"]).iterate_items():
+            if item.get('latestPosts'):
+                posts = item['latestPosts'][:max_posts]
+                break
         
         if not posts:
-            raise HTTPException(status_code=400, detail="No posts found. Check username or API quota.")
+            raise HTTPException(status_code=400, detail="No posts found")
         
         # Corpus'a ekle
         added = 0
@@ -214,11 +257,11 @@ async def sync_instagram(
         
         db.commit()
         
-        print(f"✅ Added {added} Instagram posts to corpus")
+        print(f"✅ Added {added} Instagram posts")
         
         return {
-            "message": f"Synced {added} posts from @{instagram_username}",
-            "instagram_username": instagram_username,
+            "message": f"Synced {added} posts from @{username}",
+            "instagram_username": username,
             "posts_added": added,
             "total_posts_found": len(posts)
         }
