@@ -1,2 +1,3 @@
-from . import clients, trends, content, influencers, campaigns
-__all__ = ['clients', 'trends', 'content', 'influencers', 'campaigns']
+from . import clients, trends, content, influencers
+
+__all__ = ['clients', 'trends', 'content', 'influencers']
