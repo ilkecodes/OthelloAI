@@ -8,10 +8,10 @@ load_dotenv()
 from database import engine, Base, Client, Trend, Influencer, Content
 from database import BrandCorpus, BrandVoiceProfile, GeneratedContent, ContentFeedback
 
-from clients import router as clients_router
-from trends import router as trends_router
-from content import router as content_router
-from influencers import router as influencers_router
+from api.clients import router as clients_router
+from api.trends import router as trends_router
+from api.content import router as content_router
+from api.influencers import router as influencers_router
 from brand_voice_api import router as brand_voice_router
 
 print("📊 Creating database tables...")
