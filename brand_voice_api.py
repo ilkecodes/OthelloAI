@@ -162,3 +162,67 @@ def generate_content(request: GenerateContentRequest, db: Session = Depends(get_
         "text": generated_text,
         "platform": request.platform
     }
+
+# ============= INSTAGRAM AUTO-SYNC =============
+
+@router.post("/sync-instagram")
+async def sync_instagram(
+    client_id: str,
+    instagram_username: str,
+    max_posts: int = 15,
+    db: Session = Depends(get_db)
+):
+    """Instagram profilinden otomatik içerik çek ve corpus'a ekle"""
+    
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    try:
+        # Apify ile Instagram profil scrape
+        from apify_scanner import ApifyScanner
+        scanner = ApifyScanner()
+        
+        print(f"📸 Syncing Instagram @{instagram_username}...")
+        
+        posts = await scanner.scan_instagram_profile(instagram_username, max_posts=max_posts)
+        
+        if not posts:
+            raise HTTPException(status_code=400, detail="No posts found. Check username or API quota.")
+        
+        # Corpus'a ekle
+        added = 0
+        for post in posts:
+            caption = post.get('caption', '')
+            if not caption or len(caption) < 20:
+                continue
+            
+            corpus_item = BrandCorpus(
+                client_id=client_id,
+                platform="instagram",
+                content_type="post",
+                text_content=caption,
+                post_metadata={
+                    "likes": post.get('likesCount', 0),
+                    "comments": post.get('commentsCount', 0),
+                    "url": post.get('url', ''),
+                    "timestamp": post.get('timestamp', '')
+                }
+            )
+            db.add(corpus_item)
+            added += 1
+        
+        db.commit()
+        
+        print(f"✅ Added {added} Instagram posts to corpus")
+        
+        return {
+            "message": f"Synced {added} posts from @{instagram_username}",
+            "instagram_username": instagram_username,
+            "posts_added": added,
+            "total_posts_found": len(posts)
+        }
+        
+    except Exception as e:
+        print(f"❌ Instagram sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
