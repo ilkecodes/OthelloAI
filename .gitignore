@@ -9,3 +9,16 @@ __pycache__/
 node_modules/
 .vercel
 pgvector/
+.env
+.env.*
+venv/
+__pycache__/
+.DS_Store
+*.sqlite3
+.pytest_cache/
+.coverage
+.ruff_cache/
+othello-dashboard/app/dashboard/content/page.backup.*
+services/openai_service.py.old
+othello-dashboard/patch-*.js
+othello-dashboard/app/simple/

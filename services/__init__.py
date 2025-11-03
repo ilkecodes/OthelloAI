@@ -1,6 +1,6 @@
-from .apify_service import apify_service
-from .brand_analyzer import brand_analyzer
+"""Services Package"""
 from .openai_service import openai_service
+from .platform_specs import get_platform_spec
 from .brand_profiles import get_brand_profile, get_all_brand_profiles
 
-__all__ = ['apify_service', 'brand_analyzer', 'openai_service', 'get_brand_profile', 'get_all_brand_profiles']
+# Apify servisini doğrudan import etme, fonksiyonları kullanacağız

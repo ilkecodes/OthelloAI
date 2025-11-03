@@ -37,15 +37,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ESKİ ROUTER'LAR
+# ROUTER'LAR
 from api.clients import router as clients_router
 from api.trends import router as trends_router
 from api.content import router as content_router
 from api.influencers import router as influencers_router
 from brand_voice_api import router as brand_voice_router
-
-# YENİ SIMPLE ROUTER - EKLEDIK!
 from api.simple_content import router as simple_content_router
+from api.influencer_discovery import router as influencer_discovery_router
+from api.influencer_stats import router as influencer_stats_router
 
 # ROUTER'LARI EKLE
 app.include_router(clients_router, prefix="/api/clients", tags=["clients"])
@@ -53,9 +53,9 @@ app.include_router(trends_router, prefix="/api/trends", tags=["trends"])
 app.include_router(content_router, prefix="/api/content", tags=["content"])
 app.include_router(influencers_router, prefix="/api/influencers", tags=["influencers"])
 app.include_router(brand_voice_router, prefix="/api/brand-voice", tags=["brand-voice"])
-
-# YENİ SIMPLE CONTENT ROUTER
 app.include_router(simple_content_router, prefix="/api/content", tags=["simple-content"])
+app.include_router(influencer_discovery_router, prefix="/api/influencer-discovery", tags=["influencer-discovery"])
+app.include_router(influencer_stats_router, prefix="/api/influencer-stats", tags=["influencer-stats"])
 
 @app.get("/")
 def read_root():
@@ -63,9 +63,12 @@ def read_root():
         "status": "healthy",
         "service": "OthelloAI Marketing Platform API",
         "version": "2.0.0",
-        "features": ["clients", "trends", "content", "influencers", "brand-voice", "simple-content"]
+        "features": ["clients", "trends", "content", "influencers", "brand-voice", "simple-content", "influencer-discovery", "influencer-stats"]
     }
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+# Advanced influencer discovery endpoint
+app.include_router(influencer_discovery_router, prefix="/api/influencer-discovery", tags=["influencer-discovery"])

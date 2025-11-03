@@ -1,14 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  // Prod'da backend'e proxy
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'https://othello-backend-production-2ff4.up.railway.app/api/:path*',
+      },
+    ];
   },
+
+  // Hızlı deploy için lint’i build’te atla (sonra açarız)
   eslint: {
     ignoreDuringBuilds: true,
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

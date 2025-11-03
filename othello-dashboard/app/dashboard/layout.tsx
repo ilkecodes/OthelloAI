@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FileText, TrendingUp, Users, Sparkles } from 'lucide-react';
+import { Home, FileText, TrendingUp, Users, Sparkles, Search, BarChart } from 'lucide-react';
 
 const navigation = [
   { name: 'Ana Sayfa', href: '/dashboard', icon: Home },
   { name: 'İçerik Üretimi', href: '/dashboard/content', icon: Sparkles },
+  { name: 'Influencer Keşfi', href: '/dashboard/influencers', icon: Search },
+  { name: 'Influencer Stats', href: '/dashboard/influencer-stats', icon: BarChart },
   { name: 'Trendler', href: '/dashboard/trends', icon: TrendingUp },
   { name: 'Müşteriler', href: '/dashboard/clients', icon: Users },
 ];
@@ -21,7 +23,6 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex">
-        {/* Sidebar */}
         <aside className="w-64 bg-white border-r border-gray-200 min-h-screen">
           <div className="p-6">
             <h1 className="text-2xl font-bold text-blue-600">Othello</h1>
@@ -44,21 +45,13 @@ export default function DashboardLayout({
                   }`}
                 >
                   <Icon className="h-5 w-5" />
-                  <span>{item.name}</span>
+                  <span className="text-sm">{item.name}</span>
                 </Link>
               );
             })}
           </nav>
-
-          <div className="absolute bottom-6 left-6 right-6">
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-200">
-              <p className="text-xs font-semibold text-gray-700 mb-1">Othello AI</p>
-              <p className="text-xs text-gray-600">v2.0.0</p>
-            </div>
-          </div>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1">
           {children}
         </main>

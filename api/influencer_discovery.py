@@ -1,37 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from database import get_db, Influencer, Client
-from services.influencer_service import influencer_discovery
+"""Influencer Discovery API - Simple"""
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional, List
+import sys
+sys.path.append('..')
+from services.apify_service import search_instagram_profiles
 
 router = APIRouter()
 
 class InfluencerSearchRequest(BaseModel):
-    client_id: str
-    hashtags: Optional[List[str]] = []
-    location: Optional[str] = None
-    min_followers: Optional[int] = 1000
-    limit: Optional[int] = 30
+    search_query: Optional[str] = None
+    usernames: Optional[List[str]] = None
+    max_results: Optional[int] = 20
 
-@router.post("/discover")
-async def discover_influencers(request: InfluencerSearchRequest, db: Session = Depends(get_db)):
-    client = db.query(Client).filter(Client.id == request.client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+@router.post("/search")
+async def search_influencers(request: InfluencerSearchRequest):
+    """Basit influencer arama"""
     
-    print(f"Searching influencers for {client.name}")
-    discovered = []
+    if not request.search_query and not request.usernames:
+        raise HTTPException(status_code=400, detail="Search query veya usernames gerekli")
     
-    if request.hashtags:
-        hashtag_results = influencer_discovery.search_by_hashtag(request.hashtags, request.limit)
-        for inf in hashtag_results[:10]:
-            profile = influencer_discovery.analyze_profile(inf["username"])
-            if profile and profile["followers"] >= request.min_followers:
-                discovered.append(profile)
+    result = await search_instagram_profiles(
+        search_query=request.search_query,
+        usernames=request.usernames,
+        max_results=request.max_results
+    )
     
-    return {
-        "client": client.name,
-        "total_found": len(discovered),
-        "influencers": discovered
-    }
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Error"))
+    
+    return result
