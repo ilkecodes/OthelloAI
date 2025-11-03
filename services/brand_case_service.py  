@@ -1,0 +1,282 @@
+"""
+Brand Case Content Generation Service
+Kurumsal dönüşüm hikayeleri için carousel ve single post üreten modül
+"""
+
+import os
+from typing import Dict, Any, List, Optional
+from openai import OpenAI
+import json
+
+class BrandCaseService:
+    """Brand transformation stories için içerik üretimi"""
+    
+    def __init__(self):
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.openai_client = OpenAI(api_key=api_key) if api_key else None
+    
+    PROMPT_TEMPLATE = """
+Role: Sen yaratıcı bir dijital ajans içerik stratejistisin.
+
+MÜŞTERİ: {client_name}
+PROJE TİPİ: {project_type}
+HEDEF: {goal}
+MARKA SESİ: {brand_voice}
+
+GÖREV:
+Bir marka dönüşüm hikayesi carousel içeriği oluştur (5 slayt).
+
+Her slayt şunları içermeli:
+1. Title (başlık)
+2. Caption (1-2 cümle açıklama)
+3. Visual (görsel açıklaması - tasarımcılar için brief)
+
+Ayrıca tek post için:
+- Caption (hikayeyi anlatan, engaging)
+- CTA (call-to-action)
+- Hashtags (3-5 adet)
+
+ÖNEMLİ:
+- Marka sesine sadık kal
+- Profesyonel ama samimi ol
+- Dönüşüm hikayesini adım adım anlat
+- Her slayt görsel olarak farklı olmalı
+- Türkçe yaz
+- JSON formatında döndür
+
+OUTPUT FORMAT (sadece JSON döndür, başka metin ekleme):
+{{
+  "slides": [
+    {{
+      "slide_number": 1,
+      "title": "...",
+      "caption": "...",
+      "visual_brief": "..."
+    }}
+  ],
+  "single_post": {{
+    "caption": "...",
+    "cta": "...",
+    "hashtags": ["...", "..."]
+  }},
+  "content_strategy": {{
+    "narrative_flow": "...",
+    "engagement_hooks": ["...", "..."],
+    "visual_style": "..."
+  }}
+}}
+"""
+
+    async def generate_brand_case(
+        self,
+        client_name: str,
+        project_type: str,
+        goal: str,
+        brand_voice: Dict[str, Any],
+        additional_context: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Brand case içeriği üret
+        
+        Args:
+            client_name: Müşteri adı
+            project_type: Proje tipi (Logo, Website, Rebranding, etc.)
+            goal: İçerik hedefi (awareness, portfolio_showcase, engagement)
+            brand_voice: Marka sesi profili
+            additional_context: Ekstra bilgi (öncesi-sonrası detaylar)
+        
+        Returns:
+            Dict içinde slides, single_post ve metadata
+        """
+        
+        if not self.openai_client:
+            print("⚠️ OpenAI API key not configured")
+            return self._fallback_output(client_name, project_type)
+        
+        # Brand voice'i metin formatına çevir
+        brand_voice_text = self._format_brand_voice(brand_voice)
+        
+        # Prompt oluştur
+        prompt = self.PROMPT_TEMPLATE.format(
+            client_name=client_name,
+            project_type=project_type,
+            goal=goal,
+            brand_voice=brand_voice_text
+        )
+        
+        if additional_context:
+            prompt += f"\n\nEK BAĞLAM:\n{additional_context}"
+        
+        try:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Sen kurumsal dönüşüm hikayelerinde uzman bir content strategist'sin. Sadece geçerli JSON döndürüyorsun."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=1500
+            )
+            
+            content = response.choices[0].message.content.strip()
+            
+            # JSON temizleme
+            if content.startswith('```'):
+                content = content.split('```')[1]
+                if content.startswith('json'):
+                    content = content[4:]
+                content = content.strip()
+            
+            result = json.loads(content)
+            
+            # Validasyon
+            if not self._validate_output(result):
+                print("⚠️ Generated content doesn't match schema, using fallback")
+                return self._fallback_output(client_name, project_type)
+            
+            # Metadata ekle
+            result["metadata"] = {
+                "project_type": project_type,
+                "goal": goal,
+                "slides_count": len(result.get("slides", [])),
+                "generated_at": "2025-10-31"
+            }
+            
+            print(f"✅ Brand case generated: {len(result['slides'])} slides")
+            return result
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON parse hatası: {e}")
+            return self._fallback_output(client_name, project_type)
+            
+        except Exception as e:
+            print(f"❌ İçerik üretim hatası: {e}")
+            return self._fallback_output(client_name, project_type)
+    
+    def _format_brand_voice(self, brand_voice: Dict[str, Any]) -> str:
+        """Brand voice dict'i metin formatına çevir"""
+        if not brand_voice:
+            return "Profesyonel, güvenilir, modern"
+        
+        parts = []
+        if "tone" in brand_voice:
+            parts.append(f"Ton: {brand_voice['tone']}")
+        if "language_style" in brand_voice:
+            parts.append(f"Dil: {brand_voice['language_style']}")
+        if "brand_personality" in brand_voice:
+            personality = brand_voice['brand_personality']
+            if isinstance(personality, list):
+                parts.append(f"Kişilik: {', '.join(personality)}")
+            else:
+                parts.append(f"Kişilik: {personality}")
+        if "emoji_usage" in brand_voice:
+            parts.append(f"Emoji: {brand_voice['emoji_usage']}")
+        
+        return " | ".join(parts) if parts else "Profesyonel, modern"
+    
+    def _validate_output(self, output: Dict) -> bool:
+        """Üretilen içeriğin schema'ya uygunluğunu kontrol et"""
+        required_keys = ["slides", "single_post"]
+        
+        if not all(key in output for key in required_keys):
+            return False
+        
+        # Slides kontrolü
+        slides = output.get("slides", [])
+        if not isinstance(slides, list) or len(slides) < 3:
+            return False
+        
+        for slide in slides:
+            if not all(key in slide for key in ["title", "caption", "visual_brief"]):
+                return False
+        
+        # Single post kontrolü
+        single_post = output.get("single_post", {})
+        if not all(key in single_post for key in ["caption", "cta"]):
+            return False
+        
+        return True
+    
+    def _fallback_output(self, client_name: str, project_type: str) -> Dict[str, Any]:
+        """API hatası durumunda fallback içerik"""
+        return {
+            "slides": [
+                {
+                    "slide_number": 1,
+                    "title": "Proje Başlangıcı",
+                    "caption": f"{client_name} için {project_type} projesi başladı.",
+                    "visual_brief": "Proje kapak görseli - marka logosu ve proje adı"
+                },
+                {
+                    "slide_number": 2,
+                    "title": "Tasarım Süreci",
+                    "caption": "Marka kimliğini yansıtan modern bir tasarım oluşturduk.",
+                    "visual_brief": "Tasarım mockup'ları - çeşitli platformlarda görsel"
+                },
+                {
+                    "slide_number": 3,
+                    "title": "Dijital Entegrasyon",
+                    "caption": "Tüm platformlarda tutarlı bir kimlik sağladık.",
+                    "visual_brief": "Çoklu platform gösterimi - web, sosyal medya, baskı"
+                },
+                {
+                    "slide_number": 4,
+                    "title": "Uygulama",
+                    "caption": "Gerçek dünya uygulamaları ile markanın hayata geçişi.",
+                    "visual_brief": "Kullanım örnekleri - kartvizit, katalog, dijital"
+                },
+                {
+                    "slide_number": 5,
+                    "title": "Sonuç",
+                    "caption": "Başarılı bir dijital dönüşüm gerçekleştirdik.",
+                    "visual_brief": "Öncesi-sonrası karşılaştırması ve sonuç metrikleri"
+                }
+            ],
+            "single_post": {
+                "caption": f"{client_name} için {project_type} projemizi tamamladık. Profesyonel ve modern bir kimlik oluşturduk.",
+                "cta": "Sizin markanız için de dijital kimlik tasarlayalım!",
+                "hashtags": ["#dijitalajans", "#markakimliği", "#tasarım", "#branding"]
+            },
+            "content_strategy": {
+                "narrative_flow": "Başlangıç → Süreç → Entegrasyon → Uygulama → Sonuç",
+                "engagement_hooks": ["Profesyonel sonuç", "Adım adım hikaye"],
+                "visual_style": "Modern, clean, corporate"
+            },
+            "metadata": {
+                "project_type": project_type,
+                "fallback": True,
+                "slides_count": 5
+            }
+        }
+    
+    def generate_visual_prompts(self, slides: List[Dict]) -> List[Dict[str, str]]:
+        """
+        Her slayt için görsel oluşturma prompt'ları üret
+        (Midjourney, DALL·E veya Canva API için)
+        """
+        visual_prompts = []
+        
+        for i, slide in enumerate(slides, 1):
+            visual_brief = slide.get("visual_brief", "")
+            title = slide.get("title", "")
+            
+            prompt = {
+                "slide_number": i,
+                "midjourney_prompt": f"Professional Instagram carousel slide design, {visual_brief}, modern corporate style, clean layout, high quality, 1080x1080px --ar 1:1 --v 6",
+                "dalle_prompt": f"Professional social media post design for: {title}. {visual_brief}. Modern, clean, corporate aesthetic. Instagram format.",
+                "canva_template": f"carousel_slide_{i}_modern_corporate"
+            }
+            
+            visual_prompts.append(prompt)
+        
+        return visual_prompts
+
+
+# Singleton instance
+brand_case_service = BrandCaseService()

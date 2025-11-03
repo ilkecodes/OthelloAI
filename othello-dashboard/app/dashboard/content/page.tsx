@@ -1,309 +1,276 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { generateContent, getClients } from '@/lib/api';
-import { Sparkles, FileText, Target, Users, TrendingUp } from 'lucide-react';
+import { Sparkles, Loader2, Info } from 'lucide-react';
 
 const contentGoals = [
-  { value: 'awareness', label: 'Bilinirlik Artırma', icon: '📢', color: 'blue' },
-  { value: 'engagement', label: 'Etkileşim', icon: '❤️', color: 'pink' },
-  { value: 'sales', label: 'Satış', icon: '💰', color: 'green' },
-  { value: 'education', label: 'Bilgilendirme', icon: '��', color: 'purple' },
-  { value: 'community', label: 'Topluluk', icon: '👥', color: 'orange' }
+  { value: 'awareness', label: 'Bilinirlik', icon: '📢' },
+  { value: 'engagement', label: 'Etkileşim', icon: '❤️' },
+  { value: 'sales', label: 'Satış', icon: '💰' },
+  { value: 'education', label: 'Eğitim', icon: '📚' }
 ];
 
 const platformTypes: Record<string, any> = {
   instagram: {
     types: [
-      { value: 'feed', label: 'Feed Post', description: 'Klasik Instagram paylaşımı' },
-      { value: 'reel', label: 'Reels', description: 'Kısa video içeriği' },
-      { value: 'story', label: 'Story', description: '24 saat görünür içerik' },
-      { value: 'carousel', label: 'Carousel', description: 'Çoklu görsel paylaşımı' }
-    ]
-  },
-  facebook: {
-    types: [
-      { value: 'post', label: 'Post', description: 'Standart paylaşım' },
-      { value: 'video', label: 'Video', description: 'Video içeriği' },
-      { value: 'event', label: 'Event', description: 'Etkinlik duyurusu' }
+      { value: 'carousel', label: 'Carousel', icon: '🎠' },
+      { value: 'reel', label: 'Reel', icon: '🎬' },
+      { value: 'post', label: 'Post', icon: '📸' }
     ]
   },
   linkedin: {
     types: [
-      { value: 'post', label: 'Post', description: 'Profesyonel paylaşım' },
-      { value: 'article', label: 'Article', description: 'Uzun form içerik' },
-      { value: 'poll', label: 'Poll', description: 'Anket' }
+      { value: 'carousel', label: 'Carousel', icon: '📑' },
+      { value: 'post', label: 'Post', icon: '💼' }
     ]
   },
-  tiktok: {
+  twitter: {
     types: [
-      { value: 'video', label: 'Video', description: 'Kısa video' },
-      { value: 'duet', label: 'Duet', description: 'İşbirliği videosu' }
+      { value: 'thread', label: 'Thread', icon: '🧵' },
+      { value: 'tweet', label: 'Tweet', icon: '🐦' }
     ]
   }
 };
 
-const toneOptions = [
-  { value: 'professional', label: 'Profesyonel', emoji: '👔' },
-  { value: 'friendly', label: 'Samimi', emoji: '😊' },
-  { value: 'casual', label: 'Gündelik', emoji: '��' },
-  { value: 'energetic', label: 'Enerjik', emoji: '⚡' },
-  { value: 'inspirational', label: 'İlham Verici', emoji: '✨' },
-  { value: 'humorous', label: 'Eğlenceli', emoji: '😄' }
+const CLIENTS = [
+  { id: '1', name: 'Op. Dr. Murat Önal' },
+  { id: '2', name: 'Kemerli Ev Restaurant' },
+  { id: '3', name: 'Basda Cyprus' },
+  { id: '4', name: 'Baklava Atölyesi' },
+  { id: '5', name: 'DJ Soydan Korkmaz' },
+  { id: '6', name: 'Othello Digital' },
+  { id: '7', name: 'Nesdersan Kıbrıs' },
+  { id: '8', name: 'Casa De Mellizo' }
 ];
 
 export default function ContentPage() {
-  const [clients, setClients] = useState<any[]>([]);
   const [clientId, setClientId] = useState('');
   const [platform, setPlatform] = useState('instagram');
-  const [contentType, setContentType] = useState('feed');
-  const [goal, setGoal] = useState('awareness');
+  const [contentType, setContentType] = useState('carousel');
+  const [goal, setGoal] = useState('engagement');
   const [topic, setTopic] = useState('');
-  const [tone, setTone] = useState('professional');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    getClients().then(res => setClients(res.data)).catch(console.error);
-  }, []);
-
-  const selectedClient = clients.find(c => c.id === clientId);
-  const selectedGoal = contentGoals.find(g => g.value === goal);
+  const selectedClient = CLIENTS.find(c => c.id === clientId);
 
   const handleGenerate = async () => {
-    if (!clientId || !topic) return;
+    if (!selectedClient || !topic) return;
+    
     setLoading(true);
+    setResult('');
+    
     try {
-      const res = await generateContent({
-        client_id: clientId,
-        platform,
-        content_type: contentType,
-        topic,
-        tone,
-        goal
+      const res = await fetch('http://localhost:8000/api/content/simple-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_name: selectedClient.name,
+          platform,
+          content_type: contentType,
+          topic,
+          goal
+        })
       });
-      setResult(res.data);
+      
+      const data = await res.json();
+      
+      if (data.success && data.content) {
+        setResult(data.content);
+      } else {
+        setResult('❌ İçerik üretilemedi.');
+      }
     } catch (error) {
-      console.error('İçerik üretimi hatası:', error);
+      console.error('Error:', error);
+      setResult('❌ Hata oluştu. Backend çalışıyor mu kontrol edin.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold">İçerik Üretimi</h1>
-        <p className="text-slate-600">AI destekli sosyal medya içeriği oluşturun</p>
+        <p className="text-slate-600">Şeffaf akış formatında AI destekli içerik</p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              Yeni İçerik Oluştur
-            </CardTitle>
-            <CardDescription>Parametreleri seçin ve AI içerik üretsin</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Müşteri Seçimi */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">Müşteri</label>
-              <Select value={clientId} onValueChange={setClientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Müşteri seçin" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map(client => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedClient && (
-                <div className="mt-2 p-3 bg-slate-50 rounded-lg">
-                  <p className="text-sm font-medium">{selectedClient.brand_guidelines?.industry}</p>
-                  <p className="text-xs text-slate-600 mt-1">
-                    {selectedClient.brand_guidelines?.brand_voice}
-                  </p>
-                </div>
-              )}
-            </div>
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+        <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+        <div className="text-sm text-blue-900">
+          <p className="font-semibold mb-1">Şeffaf Akış Formatı + Marka Kimliği</p>
+          <p className="text-blue-700">Her içerik detaylı akışla üretilir ve marka renkler/fontları korunur</p>
+        </div>
+      </div>
 
-            {/* Amaç Seçimi */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">İçerik Amacı</label>
-              <div className="grid grid-cols-2 gap-2">
-                {contentGoals.map(g => (
-                  <button
-                    key={g.value}
-                    onClick={() => setGoal(g.value)}
-                    className={`p-3 border-2 rounded-lg text-left transition ${
-                      goal === g.value
-                        ? `border-${g.color}-600 bg-${g.color}-50`
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{g.icon}</span>
-                      <span className="text-sm font-medium">{g.label}</span>
-                    </div>
-                  </button>
-                ))}
+      <div className="grid lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                İçerik Ayarları
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Müşteri</label>
+                <Select value={clientId} onValueChange={setClientId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Müşteri seçin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLIENTS.map(client => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
 
-            {/* Platform ve Tür */}
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium mb-2 block">Platform</label>
-                <Select value={platform} onValueChange={(v) => { setPlatform(v); setContentType(platformTypes[v].types[0].value); }}>
+                <Select value={platform} onValueChange={(v) => {
+                  setPlatform(v);
+                  const types = platformTypes[v]?.types || [];
+                  if (types.length > 0) {
+                    setContentType(types[0].value);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="instagram">📷 Instagram</SelectItem>
-                    <SelectItem value="facebook">📘 Facebook</SelectItem>
                     <SelectItem value="linkedin">💼 LinkedIn</SelectItem>
-                    <SelectItem value="tiktok">🎵 TikTok</SelectItem>
+                    <SelectItem value="twitter">🐦 Twitter</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-2 block">İçerik Türü</label>
+                <label className="text-sm font-medium mb-2 block">Format</label>
                 <Select value={contentType} onValueChange={setContentType}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {platformTypes[platform]?.types.map((type: any) => (
+                    {(platformTypes[platform]?.types || []).map((type: any) => (
                       <SelectItem key={type.value} value={type.value}>
-                        {type.label}
+                        {type.icon} {type.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-slate-500 mt-1">
-                  {platformTypes[platform]?.types.find((t: any) => t.value === contentType)?.description}
-                </p>
               </div>
-            </div>
 
-            {/* Ton */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">İçerik Tonu</label>
-              <div className="grid grid-cols-3 gap-2">
-                {toneOptions.map(t => (
-                  <button
-                    key={t.value}
-                    onClick={() => setTone(t.value)}
-                    className={`p-2 border rounded-lg text-sm transition ${
-                      tone === t.value
-                        ? 'border-pink-600 bg-pink-50'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <span className="mr-1">{t.emoji}</span>
-                    {t.label}
-                  </button>
-                ))}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Hedef</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {contentGoals.map(g => (
+                    <button
+                      key={g.value}
+                      onClick={() => setGoal(g.value)}
+                      className={`p-2 border-2 rounded-lg transition text-left ${
+                        goal === g.value 
+                          ? 'border-blue-600 bg-blue-50' 
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{g.icon}</span>
+                        <span className="text-xs font-medium">{g.label}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Konu */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">Konu / Tema</label>
-              <Input 
-                placeholder="Örn: Bahar mevsimi sağlık ipuçları"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-              />
-            </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Konu / Tema</label>
+                <Input 
+                  placeholder="Örn: IVF süreci"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                />
+              </div>
 
-            <Button 
-              onClick={handleGenerate} 
-              disabled={loading || !clientId || !topic}
-              className="w-full"
-            >
-              {loading ? 'Üretiliyor...' : 'İçerik Üret'}
-            </Button>
-          </CardContent>
-        </Card>
+              <Button 
+                onClick={handleGenerate}
+                disabled={loading || !clientId || !topic}
+                className="w-full"
+                size="lg"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Üretiliyor...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    İçerik Üret
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
 
-        <Card>
+          {selectedClient && (
+            <Card className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Seçilenler</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div>
+                  <span className="text-gray-600">Müşteri:</span>
+                  <p className="font-semibold">{selectedClient.name}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Platform:</span>
+                  <p className="font-semibold capitalize">{platform}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Format:</span>
+                  <p className="font-semibold capitalize">{contentType}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              Seçilen Parametreler
-            </CardTitle>
+            <CardTitle>Şeffaf Akış Çıktısı</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {selectedClient ? (
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <p className="text-xs text-blue-600">Müşteri</p>
-                <p className="text-sm font-semibold">{selectedClient.name}</p>
+          <CardContent>
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
+                <p className="text-gray-600">İçerik üretiliyor...</p>
+                <p className="text-sm text-gray-400 mt-2">Bu 10-30 saniye sürebilir</p>
+              </div>
+            ) : result ? (
+              <div className="prose prose-sm max-w-none">
+                <pre className="whitespace-pre-wrap text-sm bg-gradient-to-br from-gray-50 to-white p-6 rounded-lg border-2 border-gray-200 font-mono leading-relaxed overflow-x-auto">
+                  {result}
+                </pre>
               </div>
             ) : (
-              <div className="p-3 bg-slate-100 rounded-lg text-sm text-slate-500">
-                Müşteri seçilmedi
+              <div className="text-center py-20 text-gray-400">
+                <Sparkles className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                <p className="text-lg font-medium mb-2">Sonuç burada görünecek</p>
+                <p className="text-sm">Sol taraftan ayarları yapıp &quot;İçerik Üret&quot; butonuna tıklayın</p>
               </div>
             )}
-
-            {selectedGoal && (
-              <div className="p-3 bg-purple-50 rounded-lg">
-                <p className="text-xs text-purple-600">Amaç</p>
-                <p className="text-sm font-semibold">
-                  {selectedGoal.icon} {selectedGoal.label}
-                </p>
-              </div>
-            )}
-
-            <div className="p-3 bg-green-50 rounded-lg">
-              <p className="text-xs text-green-600">Platform</p>
-              <p className="text-sm font-semibold capitalize">{platform} - {contentType}</p>
-            </div>
-
-            <div className="p-3 bg-orange-50 rounded-lg">
-              <p className="text-xs text-orange-600">Ton</p>
-              <p className="text-sm font-semibold">
-                {toneOptions.find(t => t.value === tone)?.emoji} {toneOptions.find(t => t.value === tone)?.label}
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>
-
-      {result && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Üretilen İçerik
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-slate-50 p-6 rounded-lg whitespace-pre-wrap font-mono text-sm">
-              {result.content || result.text}
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button variant="outline" onClick={() => navigator.clipboard.writeText(result.content || result.text)}>
-                📋 Kopyala
-              </Button>
-              <Button variant="outline">
-                💾 Kaydet
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

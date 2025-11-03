@@ -1,107 +1,96 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, TrendingUp, FileText, Target } from 'lucide-react';
-import { getClients, getCampaigns } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Sparkles, TrendingUp, Users, FileText } from 'lucide-react';
+import Link from 'next/link';
+
+const quickActions = [
+  {
+    title: 'İçerik Üret',
+    description: 'AI ile sosyal medya içeriği oluştur',
+    icon: Sparkles,
+    href: '/dashboard/content',
+    color: 'blue'
+  },
+  {
+    title: 'Trendleri İncele',
+    description: 'Güncel trendleri keşfet',
+    icon: TrendingUp,
+    href: '/dashboard/trends',
+    color: 'green'
+  },
+  {
+    title: 'Müşteriler',
+    description: 'Müşteri portföyünü yönet',
+    icon: Users,
+    href: '/dashboard/clients',
+    color: 'purple'
+  }
+];
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
-    clients: 0,
-    campaigns: 0,
-    trends: 0,
-    content: 0
-  });
-
-  useEffect(() => {
-    async function loadStats() {
-      try {
-        const [clientsRes, campaignsRes] = await Promise.all([
-          getClients(),
-          getCampaigns()
-        ]);
-        setStats({
-          clients: clientsRes.data.length,
-          campaigns: campaignsRes.data.length,
-          trends: 0,
-          content: 0
-        });
-      } catch (error) {
-        console.error('Stats yüklenemedi:', error);
-      }
-    }
-    loadStats();
-  }, []);
-
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Genel Bakış</h1>
-        <p className="text-slate-600">OthelloAI Marketing Platform istatistikleri</p>
+        <h1 className="text-3xl font-bold">Hoş Geldiniz</h1>
+        <p className="text-gray-600">Othello AI Marketing Platform</p>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Müşteriler</CardTitle>
-            <Users className="h-4 w-4 text-slate-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.clients}</div>
-            <p className="text-xs text-slate-600">Aktif müşteri sayısı</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Kampanyalar</CardTitle>
-            <Target className="h-4 w-4 text-slate-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.campaigns}</div>
-            <p className="text-xs text-slate-600">Aktif kampanya</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Trendler</CardTitle>
-            <TrendingUp className="h-4 w-4 text-slate-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.trends}</div>
-            <p className="text-xs text-slate-600">Taranan trend</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">İçerikler</CardTitle>
-            <FileText className="h-4 w-4 text-slate-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.content}</div>
-            <p className="text-xs text-slate-600">Üretilen içerik</p>
-          </CardContent>
-        </Card>
+      <div className="grid md:grid-cols-3 gap-6">
+        {quickActions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <Link key={action.href} href={action.href}>
+              <Card className="hover:shadow-lg transition cursor-pointer">
+                <CardHeader>
+                  <div className={`w-12 h-12 rounded-lg bg-${action.color}-100 flex items-center justify-center mb-3`}>
+                    <Icon className={`h-6 w-6 text-${action.color}-600`} />
+                  </div>
+                  <CardTitle className="text-lg">{action.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-600">{action.description}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Hoş Geldiniz</CardTitle>
-          <CardDescription>
-            OthelloAI Marketing Platform ile sosyal medya stratejilerinizi otomatikleştirin
-          </CardDescription>
+          <CardTitle>Sistem Özellikleri</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            <p className="text-sm">Platform özellikleri:</p>
-            <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
-              <li>Otomatik trend taraması (Instagram hashtag analizi)</li>
-              <li>GPT-4 ile içerik üretimi</li>
-              <li>Influencer keşif ve skorlama</li>
-              <li>Kampanya yönetimi</li>
-            </ul>
+          <div className="grid md:grid-cols-2 gap-4 text-sm">
+            <div className="flex items-start gap-3">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-semibold">Şeffaf Akış Formatı</p>
+                <p className="text-gray-600">9 adımlı detaylı içerik üretimi</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-semibold">Marka Kimliği Koruması</p>
+                <p className="text-gray-600">Her marka için özel renk ve font kullanımı</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-semibold">Tasarımcı Brief&apos;i</p>
+                <p className="text-gray-600">Detaylı görsel tasarım notları</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+              <div>
+                <p className="font-semibold">Çoklu Format</p>
+                <p className="text-gray-600">Carousel, Reel, Post, Thread desteği</p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
