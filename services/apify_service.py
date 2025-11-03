@@ -1,4 +1,4 @@
-"""Apify Service - Simple & Working"""
+"""Apify Service - With Location Support"""
 import os
 from apify_client import ApifyClient
 from typing import Optional, List, Dict
@@ -7,13 +7,13 @@ client = ApifyClient(os.getenv("APIFY_API_TOKEN"))
 
 async def search_instagram_profiles(
     search_query: Optional[str] = None,
+    location: Optional[str] = None,
     usernames: Optional[List[str]] = None,
     max_results: int = 20
 ) -> Dict:
-    """Basit Instagram arama"""
+    """Instagram arama - konum desteği ile"""
     
     if usernames:
-        # Direkt username arama
         profiles = await get_profile_details(usernames[:max_results])
         return {
             "success": True,
@@ -22,32 +22,47 @@ async def search_instagram_profiles(
         }
     
     elif search_query:
-        # Hashtag arama
         try:
-            hashtag = search_query.replace(" ", "").replace("#", "")
-            print(f"🔍 Searching: #{hashtag}")
+            # Konum varsa query'ye ekle
+            if location:
+                hashtags = [
+                    search_query.replace(" ", ""),
+                    f"{search_query.replace(' ', '')}{location.replace(' ', '')}",
+                    location.replace(" ", "")
+                ]
+            else:
+                hashtags = [search_query.replace(" ", "")]
             
-            run = client.actor("apify/instagram-hashtag-scraper").call(
-                run_input={
-                    "hashtags": [hashtag],
-                    "resultsLimit": 50
-                },
-                timeout_secs=90
-            )
+            print(f"🔍 Searching: {hashtags}")
             
-            usernames = set()
-            for item in client.dataset(run["defaultDatasetId"]).iterate_items():
-                username = item.get("ownerUsername")
-                if username:
-                    usernames.add(username)
+            all_usernames = set()
             
-            print(f"✅ Found {len(usernames)} profiles")
+            for hashtag in hashtags[:2]:  # İlk 2 hashtag
+                try:
+                    run = client.actor("apify/instagram-hashtag-scraper").call(
+                        run_input={
+                            "hashtags": [hashtag],
+                            "resultsLimit": 30
+                        },
+                        timeout_secs=60
+                    )
+                    
+                    for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+                        username = item.get("ownerUsername")
+                        if username:
+                            all_usernames.add(username)
+                except Exception as e:
+                    print(f"  ⚠️ Hashtag {hashtag} failed: {e}")
+                    continue
             
-            profiles = await get_profile_details(list(usernames)[:20])
+            print(f"✅ Found {len(all_usernames)} unique profiles")
+            
+            profiles = await get_profile_details(list(all_usernames)[:20])
             
             return {
                 "success": True,
                 "search_query": search_query,
+                "location": location,
                 "count": len(profiles),
                 "profiles": profiles
             }
@@ -126,7 +141,6 @@ async def get_profile_details(usernames: List[str]) -> List[Dict]:
                 ]
             })
         
-        # Engagement'a göre sırala
         profiles.sort(key=lambda x: x["engagement_rate"], reverse=True)
         
         return profiles

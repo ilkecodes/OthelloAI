@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# Basit in-memory storage (production'da database kullan)
 saved_influencers = []
 
 class SavedInfluencer(BaseModel):
@@ -13,14 +12,18 @@ class SavedInfluencer(BaseModel):
     full_name: str
     followers: int
     engagement_rate: float
-    category: str = "uncategorized"
     notes: str = ""
 
 @router.post("/save")
 async def save_influencer(influencer: SavedInfluencer):
     """Influencer'ı kaydet"""
+    
+    # Zaten kayıtlı mı kontrol et
+    if any(i["username"] == influencer.username for i in saved_influencers):
+        return {"success": False, "message": "Zaten kayıtlı"}
+    
     saved_influencers.append(influencer.dict())
-    return {"success": True, "message": "Influencer kaydedildi"}
+    return {"success": True, "message": "Kaydedildi"}
 
 @router.get("/saved")
 async def get_saved_influencers():
@@ -38,28 +41,21 @@ async def get_dashboard_stats():
         return {
             "total_influencers": 0,
             "total_reach": 0,
-            "avg_engagement": 0,
-            "top_categories": []
+            "avg_engagement": 0
         }
     
     total_followers = sum(i["followers"] for i in saved_influencers)
     avg_engagement = sum(i["engagement_rate"] for i in saved_influencers) / len(saved_influencers)
     
-    # Kategori bazlı gruplandırma
-    categories = {}
-    for inf in saved_influencers:
-        cat = inf.get("category", "uncategorized")
-        categories[cat] = categories.get(cat, 0) + 1
-    
     return {
         "total_influencers": len(saved_influencers),
         "total_reach": total_followers,
-        "avg_engagement": round(avg_engagement, 2),
-        "top_categories": [{"name": k, "count": v} for k, v in categories.items()]
+        "avg_engagement": round(avg_engagement, 2)
     }
 
-@router.delete("/clear")
-async def clear_saved_influencers():
-    """Tüm kayıtları temizle"""
-    saved_influencers.clear()
-    return {"success": True, "message": "Tüm kayıtlar silindi"}
+@router.delete("/remove/{username}")
+async def remove_influencer(username: str):
+    """Influencer'ı sil"""
+    global saved_influencers
+    saved_influencers = [i for i in saved_influencers if i["username"] != username]
+    return {"success": True, "message": "Silindi"}
