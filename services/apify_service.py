@@ -148,3 +148,40 @@ async def get_profile_details(usernames: List[str]) -> List[Dict]:
     except Exception as e:
         print(f"❌ Profile error: {e}")
         return []
+
+def search_instagram_by_hashtag(hashtag: str, limit: int = 20):
+    """Instagram'da hashtag ile arama yap"""
+    from apify_client import ApifyClient
+    import os
+    
+    client = ApifyClient(os.getenv("APIFY_API_TOKEN"))
+    
+    try:
+        print(f"📸 Searching Instagram: #{hashtag}")
+        
+        run = client.actor("apify/instagram-hashtag-scraper").call(
+            run_input={
+                "hashtags": [hashtag],
+                "resultsLimit": limit
+            },
+            timeout_secs=120
+        )
+        
+        profiles = []
+        for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+            profiles.append({
+                "username": item.get("ownerUsername", ""),
+                "full_name": item.get("ownerFullName", ""),
+                "biography": item.get("caption", "")[:200],  # Caption'dan bio çıkar
+                "followers": 0,  # Hashtag scraper'da yok
+                "engagement_rate": 0,
+                "profile_pic": item.get("displayUrl", ""),
+                "instagram_url": f"https://instagram.com/{item.get('ownerUsername', '')}"
+            })
+        
+        print(f"✅ Found {len(profiles)} profiles")
+        return profiles
+        
+    except Exception as e:
+        print(f"❌ Instagram search error: {e}")
+        return []
