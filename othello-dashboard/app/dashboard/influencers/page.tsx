@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Instagram, Loader2, MessageCircle, Heart, CheckCircle, Save, X, Shield, TrendingUp, Award, AlertTriangle } from 'lucide-react';
+import { Search, Instagram, Loader2, MessageCircle, Heart, CheckCircle, Save, X, Shield, Award, AlertTriangle } from 'lucide-react';
 
 interface Influencer {
   username: string;
@@ -29,17 +29,6 @@ interface Influencer {
     engagement: number;
     authenticity: number;
     activity: number;
-  };
-  bio_analysis: {
-    score: number;
-    keywords: string[];
-    relevance: string;
-    reason: string;
-  };
-  content_analysis: {
-    score: number;
-    consistency: number;
-    reason: string;
   };
   authenticity: {
     authenticity_score: number;
@@ -65,10 +54,10 @@ export default function InfluencersPage() {
   const locations = ["İstanbul", "Ankara", "İzmir", "Turkey", "Dubai", "London"];
   
   const examples = [
-    { query: "food blogger", label: "🍕 Food Blogger" },
-    { query: "fitness trainer", label: "💪 Fitness Trainer" },
-    { query: "travel photographer", label: "✈️ Travel Photo" },
-    { query: "beauty influencer", label: "💄 Beauty" }
+    { query: "food blogger", label: "🍕 Yemek Blogger" },
+    { query: "fitness trainer", label: "💪 Fitness Antrenör" },
+    { query: "travel photographer", label: "✈️ Seyahat Fotoğrafçı" },
+    { query: "beauty influencer", label: "💄 Güzellik" }
   ];
 
   const handleSearch = async () => {
@@ -118,7 +107,7 @@ export default function InfluencersPage() {
           full_name: inf.full_name,
           followers: inf.followers,
           engagement_rate: inf.engagement_rate,
-          notes: `Quality Score: ${inf.quality_score || 'N/A'}`
+          notes: `Kalite Skoru: ${inf.quality_score || 'Yok'}`
         })
       });
       
@@ -167,12 +156,23 @@ export default function InfluencersPage() {
     return 'bg-red-100 text-red-800';
   };
 
+  // Türkçe çeviri fonksiyonu
+  const translateStatus = (status: string) => {
+    const translations: {[key: string]: string} = {
+      "✅ Authentic": "✅ Güvenilir",
+      "⚠️ Mostly Authentic": "⚠️ Çoğunlukla Güvenilir",
+      "🤔 Questionable": "🤔 Şüpheli",
+      "🚫 Suspicious": "🚫 Kuşkulu"
+    };
+    return translations[status] || status;
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">🎯 Advanced Influencer Discovery</h1>
-          <p className="text-gray-600">AI-powered search with quality scoring & authenticity check</p>
+          <h1 className="text-3xl font-bold">🎯 Gelişmiş Influencer Keşfi</h1>
+          <p className="text-gray-600">AI destekli arama, kalite puanı ve güvenilirlik kontrolü</p>
         </div>
         {results.length > 0 && (
           <Button
@@ -194,14 +194,14 @@ export default function InfluencersPage() {
                 variant={searchMode === 'basic' ? 'default' : 'outline'}
                 onClick={() => setSearchMode('basic')}
               >
-                Basic
+                Basit
               </Button>
               <Button
                 size="sm"
                 variant={searchMode === 'advanced' ? 'default' : 'outline'}
                 onClick={() => setSearchMode('advanced')}
               >
-                🚀 Advanced
+                🚀 Gelişmiş
               </Button>
             </div>
           </CardTitle>
@@ -209,16 +209,16 @@ export default function InfluencersPage() {
         <CardContent className="space-y-4">
           {searchMode === 'advanced' && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-              <p className="font-semibold text-blue-800 mb-1">🚀 Advanced Mode Active</p>
-              <p className="text-blue-700">AI-generated hashtags, content analysis, quality scoring & authenticity check</p>
+              <p className="font-semibold text-blue-800 mb-1">🚀 Gelişmiş Mod Aktif</p>
+              <p className="text-blue-700">AI hashtag üretimi, içerik analizi, kalite puanlama ve güvenilirlik kontrolü</p>
             </div>
           )}
 
           <div className="grid md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
-              <label className="text-sm font-medium mb-2 block">Search Query *</label>
+              <label className="text-sm font-medium mb-2 block">Arama *</label>
               <Input
-                placeholder="Örn: food blogger, fitness trainer"
+                placeholder="Örn: yemek blogger, fitness antrenör"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
@@ -231,7 +231,7 @@ export default function InfluencersPage() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
               >
-                <option value="">All Locations</option>
+                <option value="">Tüm Konumlar</option>
                 {locations.map((loc) => (
                   <option key={loc} value={loc}>{loc}</option>
                 ))}
@@ -244,14 +244,14 @@ export default function InfluencersPage() {
                 className="w-full"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                {loading ? 'Analyzing...' : 'Search'}
+                {loading ? 'Analiz ediliyor...' : 'Ara'}
               </Button>
             </div>
           </div>
 
           {searchMode === 'advanced' && (
             <div className="flex items-center gap-4">
-              <label className="text-sm font-medium">Min Quality Score:</label>
+              <label className="text-sm font-medium">Minimum Kalite Puanı:</label>
               <input
                 type="range"
                 min="0"
@@ -304,7 +304,7 @@ export default function InfluencersPage() {
                   <div className="space-y-2 text-sm">
                     {inf.quality_score && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Quality Score:</span>
+                        <span className="text-gray-600">Kalite Puanı:</span>
                         <span className="font-bold text-purple-600">{inf.quality_score}/100</span>
                       </div>
                     )}
@@ -313,7 +313,7 @@ export default function InfluencersPage() {
                       <span className="font-semibold">{formatNumber(inf.followers)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Engagement:</span>
+                      <span className="text-gray-600">Etkileşim:</span>
                       <span className="font-semibold text-green-600">{inf.engagement_rate}%</span>
                     </div>
                   </div>
@@ -328,12 +328,12 @@ export default function InfluencersPage() {
         <div className="text-center py-12">
           <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
           <p className="text-gray-600 font-semibold">
-            {searchMode === 'advanced' ? '🤖 AI analyzing profiles...' : 'Searching Instagram...'}
+            {searchMode === 'advanced' ? '🤖 AI profilleri analiz ediyor...' : 'Instagram aranıyor...'}
           </p>
           <p className="text-sm text-gray-400 mt-2">
             {searchMode === 'advanced' 
-              ? 'Generating hashtags, analyzing content & scoring quality...'
-              : 'This may take 1-2 minutes'}
+              ? 'Hashtag üretimi, içerik analizi ve kalite puanlama yapılıyor...'
+              : 'Bu 1-2 dakika sürebilir'}
           </p>
         </div>
       )}
@@ -341,7 +341,7 @@ export default function InfluencersPage() {
       {!loading && results.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>{results.length} Qualified Influencers Found</CardTitle>
+            <CardTitle>{results.length} Nitelikli Influencer Bulundu</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-3 gap-4">
@@ -354,7 +354,6 @@ export default function InfluencersPage() {
                   onClick={() => compareMode ? toggleSelect(inf.username) : setSelectedInfluencer(inf)}
                 >
                   <CardHeader className="pb-3">
-                    {/* Quality Score Badge */}
                     {inf.quality_score !== undefined && (
                       <div className="flex items-center justify-between mb-2">
                         <Badge className={`${getScoreColor(inf.quality_score)} border`}>
@@ -385,22 +384,20 @@ export default function InfluencersPage() {
                   <CardContent className="space-y-3">
                     <p className="text-xs text-gray-600 line-clamp-2">{inf.biography}</p>
                     
-                    {/* Match Reasons */}
                     {inf.reasons && inf.reasons.length > 0 && (
                       <div className="bg-green-50 p-2 rounded text-xs">
-                        <p className="font-semibold text-green-800 mb-1">✓ Why qualified:</p>
+                        <p className="font-semibold text-green-800 mb-1">✓ Neden uygun:</p>
                         {inf.reasons.slice(0, 2).map((reason, i) => (
                           <p key={i} className="text-green-700">• {reason}</p>
                         ))}
                       </div>
                     )}
 
-                    {/* Warnings */}
                     {inf.authenticity?.warnings && inf.authenticity.warnings.length > 0 && (
                       <div className="bg-yellow-50 p-2 rounded text-xs">
                         <p className="font-semibold text-yellow-800 flex items-center gap-1">
                           <AlertTriangle className="h-3 w-3" />
-                          Warnings:
+                          Uyarılar:
                         </p>
                         {inf.authenticity.warnings.slice(0, 1).map((warning, i) => (
                           <p key={i} className="text-yellow-700">• {warning}</p>
@@ -411,15 +408,15 @@ export default function InfluencersPage() {
                     <div className="grid grid-cols-3 gap-2 text-center text-xs">
                       <div>
                         <p className="font-bold text-blue-600">{formatNumber(inf.followers)}</p>
-                        <p className="text-gray-500">Followers</p>
+                        <p className="text-gray-500">Takipçi</p>
                       </div>
                       <div>
                         <p className="font-bold text-green-600">{inf.engagement_rate}%</p>
-                        <p className="text-gray-500">Eng.</p>
+                        <p className="text-gray-500">Etkileşim</p>
                       </div>
                       <div>
                         <p className="font-bold text-purple-600">{inf.posts_count}</p>
-                        <p className="text-gray-500">Posts</p>
+                        <p className="text-gray-500">Post</p>
                       </div>
                     </div>
 
@@ -446,7 +443,7 @@ export default function InfluencersPage() {
                           }}
                         >
                           <Instagram className="h-3 w-3 mr-1" />
-                          Profile
+                          Profil
                         </Button>
                         <Button
                           size="sm"
@@ -457,7 +454,7 @@ export default function InfluencersPage() {
                           }}
                         >
                           <Save className="h-3 w-3 mr-1" />
-                          Save
+                          Kaydet
                         </Button>
                       </div>
                     )}
@@ -469,7 +466,7 @@ export default function InfluencersPage() {
         </Card>
       )}
 
-      {/* Detailed Modal */}
+      {/* Detaylı Modal */}
       {selectedInfluencer && !compareMode && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50" onClick={() => setSelectedInfluencer(null)}>
           <Card className="max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -495,42 +492,86 @@ export default function InfluencersPage() {
             <CardContent className="space-y-4">
               <p className="text-sm">{selectedInfluencer.biography}</p>
               
-              {/* Score Breakdown */}
               {selectedInfluencer.score_breakdown && (
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-semibold mb-3 text-sm flex items-center gap-2">
                     <Award className="h-4 w-4" />
-                    Quality Score Breakdown
+                    Kalite Puanı Detayı
                   </h4>
                   <div className="space-y-2">
-                    {Object.entries(selectedInfluencer.score_breakdown).map(([key, value]) => (
-                      <div key={key} className="flex items-center justify-between text-sm">
-                        <span className="capitalize">{key.replace('_', ' ')}:</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" 
-                              style={{ width: `${(value / 30) * 100}%` }}
-                            />
-                          </div>
-                          <span className="font-semibold w-12 text-right">{value.toFixed(1)}</span>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Bio Uyumu:</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" 
+                            style={{ width: `${(selectedInfluencer.score_breakdown.bio_match / 30) * 100}%` }}
+                          />
                         </div>
+                        <span className="font-semibold w-12 text-right">{selectedInfluencer.score_breakdown.bio_match.toFixed(1)}</span>
                       </div>
-                    ))}
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>İçerik Uyumu:</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" 
+                            style={{ width: `${(selectedInfluencer.score_breakdown.content_match / 30) * 100}%` }}
+                          />
+                        </div>
+                        <span className="font-semibold w-12 text-right">{selectedInfluencer.score_breakdown.content_match.toFixed(1)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Etkileşim:</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" 
+                            style={{ width: `${(selectedInfluencer.score_breakdown.engagement / 20) * 100}%` }}
+                          />
+                        </div>
+                        <span className="font-semibold w-12 text-right">{selectedInfluencer.score_breakdown.engagement.toFixed(1)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Güvenilirlik:</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" 
+                            style={{ width: `${(selectedInfluencer.score_breakdown.authenticity / 10) * 100}%` }}
+                          />
+                        </div>
+                        <span className="font-semibold w-12 text-right">{selectedInfluencer.score_breakdown.authenticity.toFixed(1)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Aktivite:</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" 
+                            style={{ width: `${(selectedInfluencer.score_breakdown.activity / 10) * 100}%` }}
+                          />
+                        </div>
+                        <span className="font-semibold w-12 text-right">{selectedInfluencer.score_breakdown.activity.toFixed(1)}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Authenticity */}
               {selectedInfluencer.authenticity && (
                 <div className={`p-4 rounded-lg ${getAuthenticityColor(selectedInfluencer.authenticity.status_color)}`}>
                   <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
                     <Shield className="h-4 w-4" />
-                    Authenticity Check: {selectedInfluencer.authenticity.status}
+                    Güvenilirlik Kontrolü: {translateStatus(selectedInfluencer.authenticity.status)}
                   </h4>
                   {selectedInfluencer.authenticity.red_flags && selectedInfluencer.authenticity.red_flags.length > 0 && (
                     <div className="mt-2">
-                      <p className="font-semibold text-xs">🚫 Red Flags:</p>
+                      <p className="font-semibold text-xs">🚫 Kırmızı Bayraklar:</p>
                       {selectedInfluencer.authenticity.red_flags.map((flag, i) => (
                         <p key={i} className="text-xs">• {flag}</p>
                       ))}
@@ -538,7 +579,7 @@ export default function InfluencersPage() {
                   )}
                   {selectedInfluencer.authenticity.warnings && selectedInfluencer.authenticity.warnings.length > 0 && (
                     <div className="mt-2">
-                      <p className="font-semibold text-xs">⚠️ Warnings:</p>
+                      <p className="font-semibold text-xs">⚠️ Uyarılar:</p>
                       {selectedInfluencer.authenticity.warnings.map((warning, i) => (
                         <p key={i} className="text-xs">• {warning}</p>
                       ))}
@@ -547,10 +588,9 @@ export default function InfluencersPage() {
                 </div>
               )}
 
-              {/* Match Reasons */}
               {selectedInfluencer.reasons && selectedInfluencer.reasons.length > 0 && (
                 <div className="bg-green-50 p-4 rounded-lg">
-                  <h4 className="font-semibold mb-2 text-sm text-green-800">✓ Why This is a Great Match</h4>
+                  <h4 className="font-semibold mb-2 text-sm text-green-800">✓ Neden Mükemmel Bir Eşleşme</h4>
                   <ul className="space-y-1">
                     {selectedInfluencer.reasons.map((reason, i) => (
                       <li key={i} className="text-sm text-green-700">• {reason}</li>
@@ -559,25 +599,24 @@ export default function InfluencersPage() {
                 </div>
               )}
 
-              {/* Stats Grid */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <p className="text-2xl font-bold text-blue-600">{formatNumber(selectedInfluencer.followers)}</p>
-                  <p className="text-sm text-gray-600">Followers</p>
+                  <p className="text-sm text-gray-600">Takipçi</p>
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-green-600">{selectedInfluencer.engagement_rate}%</p>
-                  <p className="text-sm text-gray-600">Engagement Rate</p>
+                  <p className="text-sm text-gray-600">Etkileşim Oranı</p>
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-purple-600">{selectedInfluencer.posts_count}</p>
-                  <p className="text-sm text-gray-600">Total Posts</p>
+                  <p className="text-sm text-gray-600">Toplam Post</p>
                 </div>
               </div>
 
               <Button className="w-full" onClick={() => window.open(selectedInfluencer.instagram_url, '_blank')}>
                 <Instagram className="h-4 w-4 mr-2" />
-                View Instagram Profile
+                Instagram Profilini Görüntüle
               </Button>
             </CardContent>
           </Card>
