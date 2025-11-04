@@ -1,31 +1,44 @@
-venv/
+# Python
 __pycache__/
-*.pyc
-.env
-.DS_Store
-*.log
-.vscode/
-.idea/
-node_modules/
-.vercel
-pgvector/
-.env
-.env.*
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 venv/
-__pycache__/
-.DS_Store
-*.sqlite3
-.pytest_cache/
-.coverage
-.ruff_cache/
-othello-dashboard/app/dashboard/content/page.backup.*
-services/openai_service.py.old
-othello-dashboard/patch-*.js
-othello-dashboard/app/simple/
+env/
+ENV/
 
 # Railway
 .railway/
 
 # Environment
+.env
 .env.local
 .env.production
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
