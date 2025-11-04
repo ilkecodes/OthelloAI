@@ -1,164 +1,16 @@
-"""Apify Service - With Location Support"""
-import os
+"""Apify Instagram Scraper Service"""
 from apify_client import ApifyClient
-from typing import Optional, List, Dict
+import os
 
 client = ApifyClient(os.getenv("APIFY_API_TOKEN"))
 
-async def search_instagram_profiles(
-    search_query: Optional[str] = None,
-    location: Optional[str] = None,
-    usernames: Optional[List[str]] = None,
-    max_results: int = 20
-) -> Dict:
-    """Instagram arama - konum desteği ile"""
-    
-    if usernames:
-        profiles = await get_profile_details(usernames[:max_results])
-        return {
-            "success": True,
-            "count": len(profiles),
-            "profiles": profiles
-        }
-    
-    elif search_query:
-        try:
-            # Konum varsa query'ye ekle
-            if location:
-                hashtags = [
-                    search_query.replace(" ", ""),
-                    f"{search_query.replace(' ', '')}{location.replace(' ', '')}",
-                    location.replace(" ", "")
-                ]
-            else:
-                hashtags = [search_query.replace(" ", "")]
-            
-            print(f"🔍 Searching: {hashtags}")
-            
-            all_usernames = set()
-            
-            for hashtag in hashtags[:2]:  # İlk 2 hashtag
-                try:
-                    run = client.actor("apify/instagram-hashtag-scraper").call(
-                        run_input={
-                            "hashtags": [hashtag],
-                            "resultsLimit": 30
-                        },
-                        timeout_secs=60
-                    )
-                    
-                    for item in client.dataset(run["defaultDatasetId"]).iterate_items():
-                        username = item.get("ownerUsername")
-                        if username:
-                            all_usernames.add(username)
-                except Exception as e:
-                    print(f"  ⚠️ Hashtag {hashtag} failed: {e}")
-                    continue
-            
-            print(f"✅ Found {len(all_usernames)} unique profiles")
-            
-            profiles = await get_profile_details(list(all_usernames)[:20])
-            
-            return {
-                "success": True,
-                "search_query": search_query,
-                "location": location,
-                "count": len(profiles),
-                "profiles": profiles
-            }
-            
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "profiles": []
-            }
-    
-    else:
-        return {
-            "success": False,
-            "error": "Search query or usernames required",
-            "profiles": []
-        }
-
-async def get_profile_details(usernames: List[str]) -> List[Dict]:
-    """Profil detaylarını çek"""
-    
-    if not usernames:
-        return []
-    
-    try:
-        print(f"📊 Getting {len(usernames)} profiles...")
-        
-        run = client.actor("apify/instagram-profile-scraper").call(
-            run_input={
-                "usernames": usernames,
-                "resultsLimit": len(usernames),
-                "addParentData": True
-            },
-            timeout_secs=180
-        )
-        
-        profiles = []
-        for item in client.dataset(run["defaultDatasetId"]).iterate_items():
-            latest_posts = item.get("latestPosts", [])[:12]
-            if not latest_posts:
-                continue
-            
-            total_likes = sum(p.get("likesCount", 0) for p in latest_posts)
-            total_comments = sum(p.get("commentsCount", 0) for p in latest_posts)
-            followers = item.get("followersCount", 0)
-            
-            if followers == 0:
-                continue
-            
-            avg_likes = total_likes / len(latest_posts)
-            avg_comments = total_comments / len(latest_posts)
-            engagement_rate = ((avg_likes + avg_comments) / followers * 100)
-            
-            profiles.append({
-                "username": item.get("username"),
-                "full_name": item.get("fullName"),
-                "biography": item.get("biography"),
-                "followers": followers,
-                "following": item.get("followsCount", 0),
-                "posts_count": item.get("postsCount", 0),
-                "engagement_rate": round(engagement_rate, 2),
-                "avg_likes": int(avg_likes),
-                "avg_comments": int(avg_comments),
-                "is_verified": item.get("verified", False),
-                "is_business": item.get("businessCategoryName") is not None,
-                "profile_pic": item.get("profilePicUrl"),
-                "instagram_url": f"https://instagram.com/{item.get('username')}",
-                "latest_posts": [
-                    {
-                        "caption": p.get("caption", "")[:100],
-                        "likes": p.get("likesCount", 0),
-                        "comments": p.get("commentsCount", 0),
-                    }
-                    for p in latest_posts[:5]
-                ]
-            })
-        
-        profiles.sort(key=lambda x: x["engagement_rate"], reverse=True)
-        
-        return profiles
-        
-    except Exception as e:
-        print(f"❌ Profile error: {e}")
-        return []
-
-def search_instagram_by_hashtag(hashtag: str, limit: int = 20):
-    """Instagram'da hashtag ile arama yap"""
-    from apify_client import ApifyClient
-    import os
-    
-    client = ApifyClient(os.getenv("APIFY_API_TOKEN"))
+def search_instagram_by_hashtag(hashtag: str, limit: int = 30):
+    """Instagram'da hashtag ile arama - TAM VERİ"""
     
     try:
         print(f"📸 Searching Instagram: #{hashtag}")
         
+        # Hashtag scraper kullan
         run = client.actor("apify/instagram-hashtag-scraper").call(
             run_input={
                 "hashtags": [hashtag],
@@ -167,21 +19,134 @@ def search_instagram_by_hashtag(hashtag: str, limit: int = 20):
             timeout_secs=120
         )
         
-        profiles = []
-        for item in client.dataset(run["defaultDatasetId"]).iterate_items():
-            profiles.append({
-                "username": item.get("ownerUsername", ""),
-                "full_name": item.get("ownerFullName", ""),
-                "biography": item.get("caption", "")[:200],  # Caption'dan bio çıkar
-                "followers": 0,  # Hashtag scraper'da yok
-                "engagement_rate": 0,
-                "profile_pic": item.get("displayUrl", ""),
-                "instagram_url": f"https://instagram.com/{item.get('ownerUsername', '')}"
-            })
+        profiles_dict = {}  # Username'e göre dedup için
         
-        print(f"✅ Found {len(profiles)} profiles")
+        for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+            username = item.get("ownerUsername", "")
+            
+            if not username or username in profiles_dict:
+                continue
+            
+            # Profile data'yı çek
+            owner_data = item.get("owner", {})
+            
+            profiles_dict[username] = {
+                "username": username,
+                "full_name": item.get("ownerFullName") or owner_data.get("full_name", ""),
+                "biography": "", # Hashtag scraper'da bio yok
+                "followers": owner_data.get("edge_followed_by", {}).get("count", 0),
+                "following": owner_data.get("edge_follow", {}).get("count", 0),
+                "posts_count": owner_data.get("edge_owner_to_timeline_media", {}).get("count", 0),
+                "engagement_rate": calculate_engagement(item),
+                "profile_pic": item.get("displayUrl", ""),
+                "instagram_url": f"https://instagram.com/{username}",
+                "is_verified": owner_data.get("is_verified", False),
+                "is_business": owner_data.get("is_business_account", False)
+            }
+        
+        profiles = list(profiles_dict.values())
+        print(f"✅ Found {len(profiles)} unique profiles")
+        
         return profiles
         
     except Exception as e:
-        print(f"❌ Instagram search error: {e}")
+        print(f"❌ Hashtag scraper error: {e}")
+        # Fallback: Profile scraper dene
+        return search_instagram_profiles_directly(hashtag, limit)
+
+def search_instagram_profiles_directly(query: str, limit: int = 20):
+    """Direkt profile scraper kullan - DAHA DETAYLI VERİ"""
+    
+    try:
+        print(f"📸 Using profile scraper for: {query}")
+        
+        # Query'den username listesi oluştur (basit yaklaşım)
+        usernames = [query.replace(' ', '_'), f"{query}_official"]
+        
+        run = client.actor("apify/instagram-profile-scraper").call(
+            run_input={
+                "usernames": usernames[:5],
+                "resultsLimit": limit
+            },
+            timeout_secs=120
+        )
+        
+        profiles = []
+        
+        for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+            profiles.append({
+                "username": item.get("username", ""),
+                "full_name": item.get("fullName", ""),
+                "biography": item.get("biography", ""),
+                "followers": item.get("followersCount", 0),
+                "following": item.get("followsCount", 0),
+                "posts_count": item.get("postsCount", 0),
+                "engagement_rate": round(item.get("engagementRate", 0) * 100, 2),
+                "profile_pic": item.get("profilePicUrl", ""),
+                "instagram_url": f"https://instagram.com/{item.get('username', '')}",
+                "is_verified": item.get("verified", False),
+                "is_business": item.get("businessCategoryName") is not None
+            })
+        
+        print(f"✅ Found {len(profiles)} profiles with full data")
+        return profiles
+        
+    except Exception as e:
+        print(f"❌ Profile scraper error: {e}")
         return []
+
+def calculate_engagement(post_data: dict) -> float:
+    """Post verisinden engagement rate hesapla"""
+    
+    try:
+        likes = post_data.get("likesCount", 0)
+        comments = post_data.get("commentsCount", 0)
+        
+        owner = post_data.get("owner", {})
+        followers = owner.get("edge_followed_by", {}).get("count", 0)
+        
+        if followers > 0:
+            engagement = ((likes + comments) / followers) * 100
+            return round(engagement, 2)
+        
+        return 0.0
+        
+    except:
+        return 0.0
+
+def get_profile_details(username: str):
+    """Tek bir profile için detaylı veri çek"""
+    
+    try:
+        print(f"📸 Getting profile details: @{username}")
+        
+        run = client.actor("apify/instagram-profile-scraper").call(
+            run_input={
+                "usernames": [username],
+                "resultsLimit": 1
+            },
+            timeout_secs=60
+        )
+        
+        for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+            return {
+                "username": item.get("username", ""),
+                "full_name": item.get("fullName", ""),
+                "biography": item.get("biography", ""),
+                "followers": item.get("followersCount", 0),
+                "following": item.get("followsCount", 0),
+                "posts_count": item.get("postsCount", 0),
+                "engagement_rate": round(item.get("engagementRate", 0) * 100, 2),
+                "profile_pic": item.get("profilePicUrl", ""),
+                "instagram_url": f"https://instagram.com/{username}",
+                "is_verified": item.get("verified", False),
+                "is_business": item.get("businessCategoryName") is not None,
+                "external_url": item.get("externalUrl", ""),
+                "category": item.get("businessCategoryName", "")
+            }
+        
+        return None
+        
+    except Exception as e:
+        print(f"❌ Profile details error: {e}")
+        return None
