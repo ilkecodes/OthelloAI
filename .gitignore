@@ -22,3 +22,10 @@ othello-dashboard/app/dashboard/content/page.backup.*
 services/openai_service.py.old
 othello-dashboard/patch-*.js
 othello-dashboard/app/simple/
+
+# Railway
+.railway/
+
+# Environment
+.env.local
+.env.production
