@@ -177,7 +177,6 @@ export default function InfluencersPage() {
         </CardContent>
       </Card>
 
-      {/* Karşılaştırma Paneli */}
       {compareMode && selected.size > 0 && (
         <Card className="bg-blue-50 border-blue-200">
           <CardHeader>

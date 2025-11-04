@@ -16,8 +16,8 @@ export default function InfluencerStatsPage() {
   const loadData = async () => {
     try {
       const [statsRes, influencersRes] = await Promise.all([
-        fetch('http://localhost:8000/api/influencer-stats/stats'),
-        fetch('http://localhost:8000/api/influencer-stats/saved')
+        fetch('/api/influencer-stats/stats'),
+        fetch('/api/influencer-stats/saved')
       ]);
       
       const statsData = await statsRes.json();

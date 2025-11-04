@@ -69,6 +69,3 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
-
-# Advanced influencer discovery endpoint
-app.include_router(influencer_discovery_router, prefix="/api/influencer-discovery", tags=["influencer-discovery"])
