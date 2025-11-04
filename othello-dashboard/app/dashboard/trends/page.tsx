@@ -1,489 +1,499 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { scanTrends, getClients } from '@/lib/api';
-import { TrendingUp, BarChart3, Hash, Users, Activity, Lightbulb, Calendar, Award, Zap, Target, AlertCircle, Globe } from 'lucide-react';
+import { 
+  Search, TrendingUp, Lightbulb, Target, Hash, Clock,
+  Zap, BarChart3, Sparkles, Music, Globe, Trophy, 
+  Loader2, RefreshCw, Film, PlayCircle, Award
+} from 'lucide-react';
 
-const clientSuggestions: Record<string, string[]> = {
-  'Healthcare': ['health', 'wellness', 'ivf', 'pregnancy', 'fertility', 'gynecology', 'women', 'medical'],
-  'Restaurant': ['food', 'dining', 'cyprus', 'restaurant', 'meyhane', 'livemusic', 'chef', 'foodie'],
-  'Food & Beverage': ['dessert', 'sweet', 'coffee', 'pastry', 'cafe', 'baklava', 'chocolate', 'cake'],
-  'Food': ['baklava', 'turkish', 'dessert', 'homemade', 'traditional', 'sweet', 'pastry'],
-  'Entertainment': ['dj', 'party', 'nightlife', 'event', 'music', 'cyprus', 'weekend', 'dance'],
-  'Digital Marketing': ['marketing', 'seo', 'digital', 'branding', 'socialmedia', 'content', 'ads'],
-  'E-commerce': ['shopping', 'online', 'electronics', 'deals', 'Cyprus', 'sale', 'discount'],
-  'Real Estate': ['realestate', 'property', 'villa', 'home', 'cyprus', 'modern', 'luxury', 'apartment']
-};
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const trendCategories = [
-  { id: 'hot', label: 'Sıcak Trendler', color: 'red', minScore: 0.08, icon: '🔥' },
-  { id: 'rising', label: 'Yükselen', color: 'orange', minScore: 0.05, icon: '📈' },
-  { id: 'stable', label: 'Stabil', color: 'blue', minScore: 0.03, icon: '📊' },
-  { id: 'emerging', label: 'Gelişen', color: 'green', minScore: 0, icon: '🌱' }
-];
-
-const popularTopics = [
-  { category: 'Teknoloji', keywords: ['ai', 'tech', 'innovation', 'future', 'digital'] },
-  { category: 'Sağlık', keywords: ['health', 'wellness', 'fitness', 'nutrition', 'yoga'] },
-  { category: 'Moda', keywords: ['fashion', 'style', 'outfit', 'trends', 'ootd'] },
-  { category: 'Yemek', keywords: ['food', 'recipe', 'cooking', 'chef', 'foodie'] },
-  { category: 'Seyahat', keywords: ['travel', 'vacation', 'adventure', 'explore', 'wanderlust'] },
-  { category: 'Güzellik', keywords: ['beauty', 'skincare', 'makeup', 'cosmetics', 'glow'] }
-];
+interface ContentType {
+  type: string;
+  percentage: number;
+  avg_engagement: number;
+  description: string;
+  emoji: string;
+}
 
 export default function TrendsPage() {
-  const [clients, setClients] = useState<any[]>([]);
-  const [scanMode, setScanMode] = useState<'client' | 'general'>('client');
-  const [clientId, setClientId] = useState('');
-  const [keywords, setKeywords] = useState('');
-  const [results, setResults] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState('scan');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResult, setSearchResult] = useState<any>(null);
+
+  const examples = [
+    "yemek tarifi videolu",
+    "fitness motivasyon",
+    "moda kombini",
+    "teknoloji haberleri"
+  ];
 
   useEffect(() => {
-    getClients().then(res => setClients(res.data)).catch(console.error);
+    loadDashboard();
   }, []);
 
-  const selectedClient = clients.find(c => c.id === clientId);
-
-  useEffect(() => {
-    if (scanMode === 'client' && selectedClient) {
-      const industry = selectedClient.brand_guidelines?.industry || '';
-      const clientKeywords = selectedClient.keywords?.keywords || [];
-      const industrySuggestions = clientSuggestions[industry] || [];
-      
-      const allSuggestions = [...new Set([...clientKeywords, ...industrySuggestions])];
-      setSuggestions(allSuggestions);
-      
-      if (!keywords) {
-        setKeywords(allSuggestions.slice(0, 3).join(', '));
-      }
-    }
-  }, [selectedClient, scanMode]);
-
-  const handleScan = async () => {
-    if ((scanMode === 'client' && !clientId) || !keywords) return;
+  const loadDashboard = async () => {
     setLoading(true);
     try {
-      const res = await scanTrends({
-        client_id: scanMode === 'client' ? clientId : 'general',
-        keywords: keywords.split(',').map(k => k.trim()),
-        limit: 30
-      });
-      setResults(res.data);
-      setHistory(prev => [{...res.data, mode: scanMode}, ...prev.slice(0, 4)]);
+      const res = await fetch(`${API_URL}/api/trends/dashboard`);
+      const data = await res.json();
+      if (data.success) {
+        setDashboardData(data.data);
+      }
     } catch (error) {
-      console.error('Trend taraması hatası:', error);
+      console.error('Dashboard error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const addSuggestion = (keyword: string) => {
-    const currentKeywords = keywords.split(',').map(k => k.trim()).filter(k => k);
-    if (!currentKeywords.includes(keyword)) {
-      setKeywords([...currentKeywords, keyword].join(', '));
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setSearchLoading(true);
+    setSearchResult(null);
+    
+    try {
+      const res = await fetch(`${API_URL}/api/trends/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: searchQuery })
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        setSearchResult(data.result);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      alert('Arama hatası!');
+    } finally {
+      setSearchLoading(false);
     }
   };
 
-  const categorizeTrend = (score: number) => {
-    if (score >= 0.08) return trendCategories[0];
-    if (score >= 0.05) return trendCategories[1];
-    if (score >= 0.03) return trendCategories[2];
-    return trendCategories[3];
+  const getContentTypeColor = (percentage: number) => {
+    if (percentage >= 40) return 'from-green-500 to-emerald-600';
+    if (percentage >= 25) return 'from-blue-500 to-cyan-600';
+    return 'from-purple-500 to-pink-600';
   };
 
-  const filteredTrends = results?.trends?.filter((t: any) => {
-    if (selectedCategory === 'all') return true;
-    const category = categorizeTrend(t.trending_score);
-    return category.id === selectedCategory;
-  }) || [];
-
-  const getTrendInsight = (trend: any) => {
-    const category = categorizeTrend(trend.trending_score);
-    if (category.id === 'hot') return 'Şimdi paylaşım yapmak için ideal! 🔥';
-    if (category.id === 'rising') return 'Yakında popüler olabilir! 📈';
-    if (category.id === 'stable') return 'Güvenilir bir konu 📊';
-    return 'Yeni bir fırsat olabilir 🌱';
+  const getCategoryColor = (category: string) => {
+    const colors: {[key: string]: string} = {
+      'food': 'bg-orange-100 text-orange-800',
+      'fashion': 'bg-pink-100 text-pink-800',
+      'fitness': 'bg-green-100 text-green-800',
+      'beauty': 'bg-purple-100 text-purple-800',
+      'travel': 'bg-blue-100 text-blue-800',
+      'tech': 'bg-gray-100 text-gray-800',
+      'entertainment': 'bg-yellow-100 text-yellow-800',
+      'lifestyle': 'bg-teal-100 text-teal-800',
+      'gaming': 'bg-indigo-100 text-indigo-800',
+      'genel': 'bg-slate-100 text-slate-800',
+      'türkiye': 'bg-red-100 text-red-800'
+    };
+    return colors[category] || 'bg-gray-100 text-gray-800';
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Trend Tarama</h1>
-        <p className="text-slate-600">Instagram hashtag analizi ile güncel trendleri keşfedin</p>
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">🔥 Trend Analiz Dashboard</h1>
+          <p className="text-gray-600">Google Trends + TikTok + İçerik Türü Analizi</p>
+        </div>
+        <Button variant="outline" onClick={loadDashboard} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Yenile
+        </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="scan">🔍 Yeni Tarama</TabsTrigger>
-          <TabsTrigger value="history">📊 Geçmiş</TabsTrigger>
-          <TabsTrigger value="insights">💡 Öneriler</TabsTrigger>
-        </TabsList>
+      {/* Search Bar */}
+      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Niş trend aramak için yazın... (örn: yemek tarifi videolu)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="flex-1 h-12 text-lg"
+              />
+              <Button 
+                onClick={handleSearch} 
+                disabled={searchLoading || !searchQuery.trim()}
+                size="lg"
+                className="px-8"
+              >
+                {searchLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+              </Button>
+            </div>
 
-        <TabsContent value="scan" className="space-y-6">
-          {/* Tarama Modu Seçimi */}
-          <div className="flex gap-4">
-            <Button
-              variant={scanMode === 'client' ? 'default' : 'outline'}
-              onClick={() => setScanMode('client')}
-              className="flex-1"
-            >
-              <Users className="mr-2 h-4 w-4" />
-              Müşteri Bazlı Tarama
-            </Button>
-            <Button
-              variant={scanMode === 'general' ? 'default' : 'outline'}
-              onClick={() => setScanMode('general')}
-              className="flex-1"
-            >
-              <Globe className="mr-2 h-4 w-4" />
-              Genel Trend Tarama
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {examples.map((ex, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSearchQuery(ex)}
+                  className="text-sm px-3 py-1.5 rounded-full bg-white border hover:bg-gray-50 transition"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
           </div>
+        </CardContent>
+      </Card>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card>
+      {/* Loading */}
+      {searchLoading && (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+              <p className="font-semibold">Trend analizi yapılıyor...</p>
+              <p className="text-sm text-gray-500 mt-2">Google + TikTok + İçerik türleri analiz ediliyor...</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* SEARCH RESULTS */}
+      {searchResult && !searchLoading && (
+        <div className="space-y-6">
+          {/* Niche Detection */}
+          <Card className="bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                Niş Tespiti
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Ana Niş</p>
+                  <Badge className="text-lg px-4 py-2">{searchResult.niche.niche}</Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Alt Kategori</p>
+                  <Badge variant="outline" className="text-lg px-4 py-2">{searchResult.niche.sub_niche}</Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Açıklama</p>
+                  <p className="text-sm">{searchResult.niche.description}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Content Types */}
+          {searchResult.content_types && (
+            <Card className="bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Hash className="h-5 w-5" />
-                  {scanMode === 'client' ? 'Müşteri Trend Taraması' : 'Genel Trend Tarama'}
+                  <Film className="h-5 w-5 text-orange-600" />
+                  En Trend İçerik Türleri
                 </CardTitle>
-                <CardDescription>
-                  {scanMode === 'client' 
-                    ? 'Müşteri seçin ve keyword\'leri girin'
-                    : 'Herhangi bir konuda trend taraması yapın'
-                  }
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {scanMode === 'client' ? (
-                  <>
+                {/* Top Performer */}
+                <div className="bg-white rounded-lg p-4 border-2 border-orange-300">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 text-white text-2xl">
+                      {searchResult.content_types.top_performing_type.emoji}
+                    </div>
                     <div>
-                      <label className="text-sm font-medium mb-2 block">Müşteri Seçin</label>
-                      <Select value={clientId} onValueChange={setClientId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Müşteri seçin" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clients.map(client => (
-                            <SelectItem key={client.id} value={client.id}>
-                              {client.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <p className="text-xs text-gray-600">🏆 En Yüksek Performans</p>
+                      <p className="font-bold text-lg">{searchResult.content_types.top_performing_type.description}</p>
                     </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div className="text-center p-2 bg-orange-50 rounded">
+                      <p className="text-2xl font-bold text-orange-600">
+                        %{searchResult.content_types.top_performing_type.percentage}
+                      </p>
+                      <p className="text-xs text-gray-600">Oran</p>
+                    </div>
+                    <div className="text-center p-2 bg-green-50 rounded">
+                      <p className="text-2xl font-bold text-green-600">
+                        {searchResult.content_types.top_performing_type.avg_engagement}x
+                      </p>
+                      <p className="text-xs text-gray-600">Avg Engagement</p>
+                    </div>
+                  </div>
+                </div>
 
-                    {selectedClient && suggestions.length > 0 && (
-                      <div className="p-3 bg-slate-50 rounded-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Lightbulb className="h-4 w-4 text-amber-600" />
-                          <p className="text-xs font-medium">Önerilen Keyword'ler</p>
+                {/* Distribution */}
+                <div className="space-y-3">
+                  <p className="font-semibold text-sm">İçerik Türü Dağılımı:</p>
+                  {searchResult.content_types.content_types.distribution.map((ct: ContentType, idx: number) => (
+                    <div key={idx} className="bg-white rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{ct.emoji}</span>
+                          <div>
+                            <p className="font-semibold text-sm">{ct.description}</p>
+                            <p className="text-xs text-gray-500">{ct.type}</p>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-1">
-                          {suggestions.map((kw, i) => (
-                            <button
-                              key={i}
-                              onClick={() => addSuggestion(kw)}
-                              className="text-xs px-2 py-1 bg-white border rounded hover:bg-slate-100"
-                            >
-                              #{kw}
-                            </button>
-                          ))}
-                        </div>
+                        <Badge className="text-lg px-3 py-1">{ct.percentage}%</Badge>
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Globe className="h-5 w-5 text-blue-600" />
-                      <p className="font-medium">Popüler Kategoriler</p>
+                      
+                      <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full bg-gradient-to-r ${getContentTypeColor(ct.percentage)} transition-all duration-500`}
+                          style={{ width: `${ct.percentage}%` }}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
+                        <span>Ortalama Engagement:</span>
+                        <span className="font-semibold text-green-600">{ct.avg_engagement}x</span>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {popularTopics.map((topic, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setKeywords(topic.keywords.slice(0, 3).join(', '))}
-                          className="p-2 bg-white rounded-lg hover:shadow-md transition text-left"
-                        >
-                          <p className="text-sm font-medium">{topic.category}</p>
-                          <p className="text-xs text-slate-600">
-                            #{topic.keywords[0]}, #{topic.keywords[1]}
-                          </p>
-                        </button>
+                  ))}
+                </div>
+
+                {/* Insights */}
+                {searchResult.content_types.content_types.insights && (
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <p className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-blue-600" />
+                      İçgörüler
+                    </p>
+                    <div className="space-y-1">
+                      {searchResult.content_types.content_types.insights.map((insight: string, idx: number) => (
+                        <p key={idx} className="text-sm text-gray-700">• {insight}</p>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Keywords (virgülle ayırın)</label>
-                  <Input 
-                    placeholder="health, wellness, fitness"
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    İngilizce keyword'ler daha iyi sonuç verir
-                  </p>
-                </div>
-
-                <Button 
-                  onClick={handleScan} 
-                  disabled={loading || (scanMode === 'client' && !clientId) || !keywords}
-                  className="w-full"
-                >
-                  {loading ? (
-                    <>
-                      <Activity className="mr-2 h-4 w-4 animate-spin" />
-                      Taranıyor...
-                    </>
-                  ) : (
-                    <>
-                      <TrendingUp className="mr-2 h-4 w-4" />
-                      Tara
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Tarama Özeti
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {results ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-blue-50 rounded-lg">
-                        <p className="text-sm text-blue-600">
-                          {scanMode === 'client' ? 'Müşteri' : 'Mod'}
-                        </p>
-                        <p className="text-lg font-bold text-blue-900 truncate">
-                          {scanMode === 'client' ? results.client : 'Genel Tarama'}
-                        </p>
-                      </div>
-                      <div className="p-4 bg-green-50 rounded-lg">
-                        <p className="text-sm text-green-600">Trend Sayısı</p>
-                        <p className="text-2xl font-bold text-green-900">{results.trends_found}</p>
-                      </div>
+                {/* Recommendations */}
+                {searchResult.content_types.recommendations && (
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <p className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <Award className="h-4 w-4 text-green-600" />
+                      Öneriler
+                    </p>
+                    <div className="space-y-1">
+                      {searchResult.content_types.recommendations.map((rec: string, idx: number) => (
+                        <p key={idx} className="text-sm text-gray-700">✓ {rec}</p>
+                      ))}
                     </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      {trendCategories.map(cat => {
-                        const count = results.trends?.filter((t: any) => 
-                          categorizeTrend(t.trending_score).id === cat.id
-                        ).length || 0;
-                        return (
-                          <div key={cat.id} className="p-2 bg-slate-50 rounded-lg text-center">
-                            <p className="text-xs text-slate-600">{cat.icon} {cat.label}</p>
-                            <p className="text-xl font-bold">{count}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-400">
-                    <TrendingUp className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>Henüz tarama yapılmadı</p>
                   </div>
                 )}
               </CardContent>
             </Card>
-          </div>
-
-          {results && results.trends && results.trends.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">Trend Sonuçları</h2>
-                <div className="flex gap-2">
-                  <Button
-                    variant={selectedCategory === 'all' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedCategory('all')}
-                  >
-                    Tümü ({results.trends.length})
-                  </Button>
-                  {trendCategories.map(cat => {
-                    const count = results.trends.filter((t: any) => 
-                      categorizeTrend(t.trending_score).id === cat.id
-                    ).length;
-                    return count > 0 && (
-                      <Button
-                        key={cat.id}
-                        variant={selectedCategory === cat.id ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setSelectedCategory(cat.id)}
-                      >
-                        {cat.icon} ({count})
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredTrends.map((trend: any, i: number) => {
-                  const category = categorizeTrend(trend.trending_score);
-                  return (
-                    <Card key={i} className="hover:shadow-lg transition-shadow">
-                      <CardHeader>
-                        <Badge className="w-fit mb-2">
-                          {category.icon} {category.label}
-                        </Badge>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Hash className="h-5 w-5 text-pink-600" />
-                          {trend.keyword}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="p-2 bg-slate-50 rounded text-center">
-                              <p className="text-xs text-slate-600">Posts</p>
-                              <p className="text-lg font-bold">{trend.post_count}</p>
-                            </div>
-                            <div className="p-2 bg-blue-50 rounded text-center">
-                              <p className="text-xs text-blue-600">Engagement</p>
-                              <p className="text-lg font-bold text-blue-900">
-                                {trend.avg_engagement?.toFixed(1)}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="p-2 bg-purple-50 rounded text-center">
-                            <p className="text-xs text-purple-600">Trend Score</p>
-                            <p className="text-xl font-bold text-purple-900">
-                              {trend.trending_score?.toFixed(3)}
-                            </p>
-                          </div>
-
-                          <div className="flex items-start gap-2 p-2 bg-amber-50 rounded">
-                            <Zap className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-amber-900">
-                              {getTrendInsight(trend)}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
           )}
-        </TabsContent>
 
-        <TabsContent value="history">
+          {/* Ranked Trends */}
           <Card>
             <CardHeader>
-              <CardTitle>Tarama Geçmişi</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-yellow-600" />
+                Top Trendler
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {history.length > 0 ? (
-                <div className="space-y-2">
-                  {history.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline">
-                            {h.mode === 'client' ? '👤 Müşteri' : '🌍 Genel'}
-                          </Badge>
-                          <p className="font-medium">{h.client || 'Genel Tarama'}</p>
-                        </div>
-                        <p className="text-sm text-slate-600">
-                          {h.keywords?.join(', ')}
-                        </p>
-                      </div>
-                      <Badge>{h.trends_found} trend</Badge>
+              <div className="space-y-3">
+                {searchResult.ranked_trends.slice(0, 10).map((trend: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-4 p-4 border rounded-lg hover:bg-gray-50 transition">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 text-white font-bold">
+                      {trend.overall_rank}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-slate-400">
-                  <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>Henüz tarama geçmişi yok</p>
-                </div>
-              )}
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold">{trend.keyword}</span>
+                        <Badge variant="outline" className="text-xs">{trend.source}</Badge>
+                        <span className="text-xl">{trend.growth}</span>
+                      </div>
+                      
+                      {trend.tiktok_views && (
+                        <p className="text-sm text-gray-600">
+                          {trend.tiktok_views} views • {trend.tiktok_posts?.toLocaleString()} posts
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-purple-600">{trend.score}</div>
+                      <div className="text-xs text-gray-500">skor</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="insights">
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card>
+          {/* AI Insights */}
+          {searchResult.ai_insights && (
+            <Card className="bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Tarama İpuçları
+                  <Sparkles className="h-5 w-5 text-blue-600" />
+                  AI İçgörüler ve Öneriler
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium">İngilizce keyword kullanın</p>
-                    <p className="text-xs text-slate-600">Daha geniş kitleye ulaşırsınız</p>
+              <CardContent className="space-y-4">
+                {/* Summary */}
+                <div className="bg-white rounded-lg p-4">
+                  <p className="font-semibold mb-2 flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Özet
+                  </p>
+                  <p className="text-sm text-gray-700">{searchResult.ai_insights.summary}</p>
+                </div>
+
+                {/* Opportunities */}
+                <div className="bg-white rounded-lg p-4">
+                  <p className="font-semibold mb-3 flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-yellow-600" />
+                    Fırsatlar
+                  </p>
+                  <div className="space-y-2">
+                    {searchResult.ai_insights.opportunities.map((opp: string, idx: number) => (
+                      <div key={idx} className="flex items-start gap-2">
+                        <span className="text-yellow-600">💡</span>
+                        <p className="text-sm">{opp}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-purple-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium">3-5 keyword kullanın</p>
-                    <p className="text-xs text-slate-600">Optimal sonuç için</p>
+
+                {/* Content Ideas */}
+                <div className="bg-white rounded-lg p-4">
+                  <p className="font-semibold mb-3 flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-purple-600" />
+                    İçerik Fikirleri
+                  </p>
+                  <div className="space-y-3">
+                    {searchResult.ai_insights.content_ideas.map((idea: any, idx: number) => (
+                      <div key={idx} className="border-l-4 border-purple-500 pl-3 py-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="outline">{idea.type}</Badge>
+                          <span className="font-semibold text-sm">{idea.title}</span>
+                        </div>
+                        <p className="text-sm text-gray-700">{idea.description}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium">Genel tarama ile pazar araştırması</p>
-                    <p className="text-xs text-slate-600">Yeni fırsatları keşfedin</p>
+
+                {/* Hashtags */}
+                <div className="bg-white rounded-lg p-4">
+                  <p className="font-semibold mb-3 flex items-center gap-2">
+                    <Hash className="h-4 w-4 text-blue-600" />
+                    Önerilen Hashtag'ler
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {searchResult.ai_insights.hashtag_recommendations.map((tag: string, idx: number) => (
+                      <Badge key={idx} className="text-sm px-3 py-1">{tag}</Badge>
+                    ))}
                   </div>
+                </div>
+
+                {/* Best Time */}
+                <div className="bg-white rounded-lg p-4">
+                  <p className="font-semibold mb-2 flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-green-600" />
+                    En İyi Paylaşım Zamanı
+                  </p>
+                  <Badge className="bg-green-100 text-green-800 text-sm px-3 py-1">
+                    {searchResult.ai_insights.best_time === 'morning' ? '🌅 Sabah (8-11)' :
+                     searchResult.ai_insights.best_time === 'afternoon' ? '☀️ Öğleden Sonra (12-17)' :
+                     '🌙 Akşam (18-22)'}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
+          )}
+        </div>
+      )}
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Award className="h-5 w-5" />
-                  Platform Özellikleri
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="p-3 bg-slate-50 rounded-lg">
-                  <p className="text-sm font-medium mb-1">✅ Müşteri Bazlı Tarama</p>
-                  <p className="text-xs text-slate-600">Müşteriye özel keyword önerileri</p>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-lg">
-                  <p className="text-sm font-medium mb-1">✅ Genel Trend Tarama</p>
-                  <p className="text-xs text-slate-600">Herhangi bir konuda araştırma</p>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-lg">
-                  <p className="text-sm font-medium mb-1">✅ Kategori Filtreleme</p>
-                  <p className="text-xs text-slate-600">Sıcak, yükselen, stabil trendler</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+      {/* Dashboard */}
+      {!searchResult && !searchLoading && !loading && dashboardData && (
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5 text-blue-600" />
+                Google Trends
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {dashboardData.google_trends?.slice(0, 10).map((trend: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{trend.trend_emoji}</span>
+                      <div>
+                        <p className="font-semibold">{trend.keyword}</p>
+                        <Badge className={`text-xs ${getCategoryColor(trend.category)}`}>
+                          {trend.category}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-blue-600">{trend.interest}</div>
+                      <div className="text-xs text-gray-500">/100</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Music className="h-5 w-5 text-pink-600" />
+                TikTok Trends
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {dashboardData.tiktok_trends?.slice(0, 10).map((trend: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center">
+                        {trend.rank}
+                      </div>
+                      <div>
+                        <p className="font-semibold">#{trend.hashtag}</p>
+                        <Badge className={`text-xs ${getCategoryColor(trend.category)}`}>
+                          {trend.category}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-pink-600">{trend.views}</div>
+                      <div className="text-xs text-gray-500">{trend.growth}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {loading && !searchLoading && (
+        <div className="text-center py-12">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto" />
+        </div>
+      )}
     </div>
   );
 }

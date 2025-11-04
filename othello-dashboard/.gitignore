@@ -43,3 +43,7 @@ next-env.d.ts
 app/dashboard/content/page.backup.*
 patch-*.js
 app/simple/
+
+# Environment
+.env.local
+.env*.local
