@@ -73,3 +73,11 @@ def health_check():
 # Advanced Search
 from api.advanced_influencer_search import router as advanced_search_router
 app.include_router(advanced_search_router, prefix="/api/advanced-search", tags=["advanced-search"])
+
+# Real-time Trends
+from api.realtime_trends import router as realtime_trends_router
+app.include_router(realtime_trends_router, prefix="/api/trends", tags=["realtime-trends"])
+
+# Trend Dashboard
+from api.trend_dashboard import router as trend_dashboard_router
+app.include_router(trend_dashboard_router, prefix="/api/trends", tags=["trend-dashboard"])
