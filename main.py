@@ -5,21 +5,9 @@ import os
 
 load_dotenv()
 
-from database import engine, Base, Client, Trend, Influencer, Content
-from database import BrandCorpus, BrandVoiceProfile, GeneratedContent, ContentFeedback
+from database import engine, Base
 
-# ESKİ BRAND VOICE TABLOLARINI SİL
-print("🗑️  Cleaning old Brand Voice tables...")
-from sqlalchemy import text
-with engine.connect() as conn:
-    conn.execute(text("DROP TABLE IF EXISTS content_feedback CASCADE;"))
-    conn.execute(text("DROP TABLE IF EXISTS generated_contents CASCADE;"))
-    conn.execute(text("DROP TABLE IF EXISTS brand_voice_profiles CASCADE;"))
-    conn.execute(text("DROP TABLE IF EXISTS brand_corpus CASCADE;"))
-    conn.commit()
-print("✅ Old tables dropped")
-
-print("📊 Creating fresh database tables...")
+print("📊 Creating database tables...")
 Base.metadata.create_all(bind=engine)
 print("✅ Database tables created")
 
@@ -46,16 +34,20 @@ from brand_voice_api import router as brand_voice_router
 from api.simple_content import router as simple_content_router
 from api.influencer_discovery import router as influencer_discovery_router
 from api.influencer_stats import router as influencer_stats_router
+from api.advanced_influencer_search import router as advanced_search_router
+from api.trend_dashboard import router as trend_dashboard_router
 
 # ROUTER'LARI EKLE
 app.include_router(clients_router, prefix="/api/clients", tags=["clients"])
-app.include_router(trends_router, prefix="/api/trends", tags=["trends"])
+app.include_router(trends_router, prefix="/api/trends-old", tags=["trends-old"])
 app.include_router(content_router, prefix="/api/content", tags=["content"])
 app.include_router(influencers_router, prefix="/api/influencers", tags=["influencers"])
 app.include_router(brand_voice_router, prefix="/api/brand-voice", tags=["brand-voice"])
 app.include_router(simple_content_router, prefix="/api/content", tags=["simple-content"])
 app.include_router(influencer_discovery_router, prefix="/api/influencer-discovery", tags=["influencer-discovery"])
 app.include_router(influencer_stats_router, prefix="/api/influencer-stats", tags=["influencer-stats"])
+app.include_router(advanced_search_router, prefix="/api/advanced-search", tags=["advanced-search"])
+app.include_router(trend_dashboard_router, prefix="/api/trends", tags=["trend-dashboard"])
 
 @app.get("/")
 def read_root():
@@ -63,21 +55,9 @@ def read_root():
         "status": "healthy",
         "service": "OthelloAI Marketing Platform API",
         "version": "2.0.0",
-        "features": ["clients", "trends", "content", "influencers", "brand-voice", "simple-content", "influencer-discovery", "influencer-stats"]
+        "features": ["clients", "trends", "content", "influencers", "brand-voice", "influencer-discovery", "advanced-search"]
     }
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
-
-# Advanced Search
-from api.advanced_influencer_search import router as advanced_search_router
-app.include_router(advanced_search_router, prefix="/api/advanced-search", tags=["advanced-search"])
-
-# Real-time Trends
-from api.realtime_trends import router as realtime_trends_router
-app.include_router(realtime_trends_router, prefix="/api/trends", tags=["realtime-trends"])
-
-# Trend Dashboard
-from api.trend_dashboard import router as trend_dashboard_router
-app.include_router(trend_dashboard_router, prefix="/api/trends", tags=["trend-dashboard"])
