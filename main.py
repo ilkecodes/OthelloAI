@@ -69,3 +69,7 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+# Advanced Search
+from api.advanced_influencer_search import router as advanced_search_router
+app.include_router(advanced_search_router, prefix="/api/advanced-search", tags=["advanced-search"])
