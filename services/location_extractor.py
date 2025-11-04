@@ -1,4 +1,4 @@
-"""AI ile Dinamik Konum Eşleştirme + KKTC Özel Desteği"""
+"""AI ile Dinamik Konum Eşleştirme + KKTC Kapsamlı Destek"""
 import os
 from openai import OpenAI
 import json
@@ -7,42 +7,58 @@ import re
 api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_TOKEN")
 openai_client = OpenAI(api_key=api_key) if api_key else None
 
-# KKTC Knowledge Base
+# KKTC Kapsamlı Knowledge Base
 CYPRUS_LOCATIONS = {
-    "kktc": ["kktc", "trnc", "kuzey kıbrıs", "kuzey kibris", "northern cyprus", "north cyprus", "kibris", "kıbrıs", "cyprus"],
-    "lefkoşa": ["lefkoşa", "lefkosa", "nicosia", "nicosie"],
+    "kktc": [
+        # Resmi isimler
+        "kktc", "trnc", "kuzey kıbrıs", "kuzey kibris", "northern cyprus", "north cyprus",
+        # Genel Kıbrıs
+        "kibris", "kıbrıs", "cyprus", "cypre",
+        # Kıbrıslı deyimleri
+        "cypriot", "kıbrıslı", "kibrisli", "cypriot",
+        # Hashtag varyasyonları
+        "northcyprus", "kuzeykibris", "kuzeykıbrıs"
+    ],
+    "lefkoşa": ["lefkoşa", "lefkosa", "nicosia", "nicosie", "lefkosya"],
     "girne": ["girne", "kyrenia", "keryneia"],
-    "gazimağusa": ["gazimağusa", "gazimagusa", "mağusa", "magusa", "famagusta"],
+    "gazimağusa": ["gazimağusa", "gazimagusa", "mağusa", "magusa", "famagusta", "ammochostos"],
     "güzelyurt": ["güzelyurt", "guzelyurt", "morphou"],
     "lefke": ["lefke", "lefka"],
-    "iskele": ["iskele", "iskele", "trikomo"],
-    "karpaz": ["karpaz", "dipkarpaz", "rizokarpaso"],
-    "lapta": ["lapta", "lapithos"],
+    "iskele": ["iskele", "trikomo"],
+    "karpaz": ["karpaz", "dipkarpaz", "rizokarpaso", "karpasia"],
+    "lapta": ["lapta", "lapithos", "lapethos"],
     "alsancak": ["alsancak", "karavas"],
     "çatalköy": ["çatalköy", "catalkoy"],
     "ozanköy": ["ozanköy", "ozankoy"],
 }
 
 def normalize_text(text: str) -> str:
-    """Metni normalize et (Türkçe karakterler dahil)"""
+    """Metni normalize et"""
     return text.lower().strip()
 
 def check_cyprus_location(text: str) -> dict:
-    """KKTC lokasyonu kontrolü - Pattern matching"""
+    """KKTC lokasyonu kontrolü - Esnek pattern matching"""
     
     text_norm = normalize_text(text)
     
     for location, aliases in CYPRUS_LOCATIONS.items():
         for alias in aliases:
-            # Kelime sınırlarıyla ara (hashtag içinde de olabilir)
-            pattern = r'\b' + re.escape(alias) + r'\b|#' + re.escape(alias)
-            if re.search(pattern, text_norm):
-                return {
-                    "found": True,
-                    "location": location,
-                    "matched_term": alias,
-                    "confidence": "high"
-                }
+            # Kelime sınırlarıyla ara (hashtag içinde de)
+            patterns = [
+                r'\b' + re.escape(alias) + r'\b',  # Kelime sınırı
+                r'#' + re.escape(alias),           # Hashtag
+                r'@' + re.escape(alias),           # Mention'da
+                alias                              # Substring (son çare)
+            ]
+            
+            for pattern in patterns:
+                if re.search(pattern, text_norm, re.IGNORECASE):
+                    return {
+                        "found": True,
+                        "location": location,
+                        "matched_term": alias,
+                        "confidence": "high"
+                    }
     
     return {"found": False}
 
@@ -52,8 +68,11 @@ def extract_location_from_bio(biography: str, username: str = "") -> dict:
     if not biography:
         return {"city": None, "country": None, "confidence": "low"}
     
-    # 1. KKTC Pattern Check (en hızlı)
-    cyprus_check = check_cyprus_location(biography)
+    # Username'de de kontrol et (urban_cypriot gibi)
+    full_text = f"{biography} {username}"
+    
+    # 1. KKTC Pattern Check
+    cyprus_check = check_cyprus_location(full_text)
     if cyprus_check["found"]:
         return {
             "city": cyprus_check["location"],
@@ -63,11 +82,10 @@ def extract_location_from_bio(biography: str, username: str = "") -> dict:
             "matched_term": cyprus_check["matched_term"]
         }
     
-    # 2. Location emoji check
-    if "📍" in biography or "📌" in biography or "🇨🇾" in biography:
-        # Emoji yakınında KKTC kelimesi var mı?
-        words_near_emoji = biography.split()
-        for word in words_near_emoji:
+    # 2. Emoji check
+    if any(emoji in biography for emoji in ["📍", "📌", "🇨��", "🌍"]):
+        words = biography.split()
+        for word in words:
             cyprus_check = check_cyprus_location(word)
             if cyprus_check["found"]:
                 return {
@@ -77,17 +95,18 @@ def extract_location_from_bio(biography: str, username: str = "") -> dict:
                     "source": "emoji_pattern"
                 }
     
-    # 3. AI ile genel konum çıkarımı
+    # 3. AI ile genel konum
     if not openai_client:
         return {"city": None, "country": None, "confidence": "low"}
     
     try:
-        prompt = f"""Extract location from Instagram bio:
+        prompt = f"""Extract location from Instagram:
 
 Bio: "{biography}"
+Username: "{username}"
 
-KKTC locations: Lefkoşa, Girne, Gazimağusa, Güzelyurt, Lefke, İskele, Karpaz, Lapta
-Aliases: KKTC = TRNC = Kuzey Kıbrıs = Northern Cyprus
+KKTC keywords: cypriot, kıbrıslı, cyprus, kıbrıs, KKTC, TRNC, Northern Cyprus
+Cities: Lefkoşa, Girne, Gazimağusa, Güzelyurt
 
 Return JSON:
 {{
@@ -112,43 +131,53 @@ Return JSON:
         print(f"⚠️ AI error: {e}")
         return {"city": None, "country": None, "confidence": "low"}
 
-def check_location_match(biography: str, target_location: str) -> dict:
-    """Kullanıcının target location'ı ile biography'yi eşleştir"""
+def check_location_match(biography: str, target_location: str, username: str = "") -> dict:
+    """Target location ile eşleştir"""
     
     if not target_location or not biography:
         return {"match": False, "confidence": "none"}
     
     target_norm = normalize_text(target_location)
-    bio_norm = normalize_text(biography)
+    
+    # Username + bio birlikte kontrol et
+    full_text = f"{biography} {username}"
     
     # 1. KKTC için özel mantık
     target_cyprus = check_cyprus_location(target_location)
-    bio_cyprus = check_cyprus_location(biography)
+    bio_cyprus = check_cyprus_location(full_text)
     
     if target_cyprus["found"] and bio_cyprus["found"]:
-        # İkisi de KKTC ile ilgili
         target_loc = target_cyprus["location"]
         bio_loc = bio_cyprus["location"]
         
-        # Genel KKTC araması → Tüm KKTC şehirlerini kabul et
+        # Genel KKTC/Cyprus araması → Tüm KKTC/Cypriot içeriği
         if target_loc == "kktc":
             return {
                 "match": True,
                 "confidence": "high",
-                "reasoning": f"Biography contains {bio_cyprus['matched_term']}, matches KKTC search",
+                "reasoning": f"Cyprus content detected: {bio_cyprus['matched_term']}",
                 "source": "cyprus_pattern"
             }
         
-        # Spesifik şehir araması
+        # Spesifik şehir
         if target_loc == bio_loc:
             return {
                 "match": True,
                 "confidence": "high",
-                "reasoning": f"Exact match: {target_cyprus['matched_term']} = {bio_cyprus['matched_term']}",
+                "reasoning": f"City match: {target_cyprus['matched_term']} = {bio_cyprus['matched_term']}",
                 "source": "cyprus_pattern"
             }
         
-        # Farklı şehirler
+        # Farklı şehirler (ama ikisi de KKTC)
+        if target_loc == "kktc" or bio_loc == "kktc":
+            # Genel KKTC araması herşeyi yakalar
+            return {
+                "match": True,
+                "confidence": "medium",
+                "reasoning": f"General Cyprus search matches {bio_loc}",
+                "source": "cyprus_pattern"
+            }
+        
         return {
             "match": False,
             "confidence": "high",
@@ -157,29 +186,30 @@ def check_location_match(biography: str, target_location: str) -> dict:
         }
     
     # 2. Basit string match
-    if target_norm in bio_norm:
+    if target_norm in normalize_text(full_text):
         return {
             "match": True,
             "confidence": "high",
-            "reasoning": "Direct string match",
+            "reasoning": "Direct text match",
             "source": "string_match"
         }
     
-    # 3. AI ile semantik eşleştirme
+    # 3. AI fallback
     if not openai_client:
         return {"match": False, "confidence": "none"}
     
     try:
-        prompt = f"""Does this bio match the target location?
+        prompt = f"""Match location?
 
 Bio: "{biography}"
+Username: "{username}"
 Target: "{target_location}"
 
 KKTC context:
-- KKTC = TRNC = Kuzey Kıbrıs = Northern Cyprus
-- Cities: Lefkoşa (Nicosia), Girne (Kyrenia), Gazimağusa (Famagusta), Güzelyurt (Morphou)
-- If searching "KKTC", match ANY KKTC city/region
-- If searching specific city, match that city only
+- Keywords: cypriot, kıbrıslı, cyprus, kıbrıs = KKTC content
+- KKTC = TRNC = Northern Cyprus = Kuzey Kıbrıs
+- Cities: Lefkoşa, Girne, Gazimağusa, Güzelyurt
+- Username can contain location hints (urban_cypriot = cypriot)
 
 Return JSON:
 {{
@@ -218,7 +248,7 @@ def filter_by_location(profiles: list, target_location: str) -> list:
         bio = profile.get("biography", "")
         username = profile.get("username", "")
         
-        match_result = check_location_match(bio, target_location)
+        match_result = check_location_match(bio, target_location, username)
         
         if match_result["match"]:
             location_data = extract_location_from_bio(bio, username)
@@ -233,22 +263,20 @@ def filter_by_location(profiles: list, target_location: str) -> list:
 # Test
 if __name__ == "__main__":
     test_cases = [
-        {"bio": "📍 Lefkoşa, KKTC | Food", "target": "KKTC"},
-        {"bio": "📍 Lefkoşa, KKTC | Food", "target": "Lefkoşa"},
-        {"bio": "Girne'den selamlar 🇨🇾", "target": "KKTC"},
-        {"bio": "Girne'den selamlar 🇨🇾", "target": "Girne"},
-        {"bio": "Girne'den selamlar", "target": "Lefkoşa"},
-        {"bio": "#kktc #lefkosa #yemek", "target": "Kuzey Kıbrıs"},
-        {"bio": "Northern Cyprus blogger", "target": "TRNC"},
-        {"bio": "Gazimağusa fitness trainer", "target": "KKTC"},
-        {"bio": "İstanbul food blogger", "target": "KKTC"},
+        {"bio": "Urban ⚡️", "username": "urban_cypriot", "target": "KKTC"},
+        {"bio": "Cyprus lifestyle blogger", "username": "cypriot_life", "target": "Kıbrıs"},
+        {"bio": "Kıbrıslı yemek bloggerı 🍕", "username": "foodie", "target": "KKTC"},
+        {"bio": "📍 Lefkoşa", "username": "lefkosa_daily", "target": "Lefkoşa"},
+        {"bio": "#cyprus #cypriot #girne", "username": "travel", "target": "KKTC"},
+        {"bio": "İstanbul food", "username": "istanbul_food", "target": "KKTC"},
     ]
     
-    print("🧪 KKTC Location Matching Tests:\n")
+    print("🧪 KKTC Location Tests (including username):\n")
     for i, test in enumerate(test_cases, 1):
-        result = check_location_match(test["bio"], test["target"])
+        result = check_location_match(test["bio"], test["target"], test["username"])
         status = "✅" if result["match"] else "❌"
         print(f"{i}. {status}")
+        print(f"   Username: @{test['username']}")
         print(f"   Bio: {test['bio']}")
         print(f"   Target: {test['target']}")
         print(f"   Result: {result.get('reasoning', 'No match')}")
